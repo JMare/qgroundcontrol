@@ -1,0 +1,21 @@
+{
+    "version":      1,
+    "fileType":  "FactMetaData",
+    "QGC.MetaData.Facts":
+[
+{
+    "name":             "aputemperature",
+    "shortDesc": "APU Temp",
+    "type":             "double",
+    "decimalPlaces":    2,
+    "units":            "C"
+},
+{
+    "name":             "apuhvCurrent",
+    "shortDesc": "HV Current",
+    "type":             "double",
+    "decimalPlaces":    2,
+    "units":            "A"
+}
+]
+}

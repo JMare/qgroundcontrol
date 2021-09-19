@@ -93,6 +93,7 @@ const char* Vehicle::_gpsFactGroupName =                "gps";
 const char* Vehicle::_windFactGroupName =               "wind";
 const char* Vehicle::_vibrationFactGroupName =          "vibration";
 const char* Vehicle::_temperatureFactGroupName =        "temperature";
+const char* Vehicle::_xtsFactGroupName =                "xts";
 const char* Vehicle::_clockFactGroupName =              "clock";
 const char* Vehicle::_setpointFactGroupName =           "setpoint";
 const char* Vehicle::_distanceSensorFactGroupName =     "distanceSensor";
@@ -146,6 +147,7 @@ Vehicle::Vehicle(LinkInterface*             link,
     , _windFactGroup                (this)
     , _vibrationFactGroup           (this)
     , _temperatureFactGroup         (this)
+    , _xtsFactGroup                 (this)
     , _clockFactGroup               (this)
     , _setpointFactGroup            (this)
     , _distanceSensorFactGroup      (this)
@@ -401,6 +403,7 @@ void Vehicle::_commonInit()
     _addFactGroup(&_windFactGroup,              _windFactGroupName);
     _addFactGroup(&_vibrationFactGroup,         _vibrationFactGroupName);
     _addFactGroup(&_temperatureFactGroup,       _temperatureFactGroupName);
+    _addFactGroup(&_xtsFactGroup,               _xtsFactGroupName);
     _addFactGroup(&_clockFactGroup,             _clockFactGroupName);
     _addFactGroup(&_setpointFactGroup,          _setpointFactGroupName);
     _addFactGroup(&_distanceSensorFactGroup,    _distanceSensorFactGroupName);
