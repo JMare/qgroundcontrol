@@ -12,7 +12,8 @@
 #include "FactGroup.h"
 #include "QGCMAVLink.h"
 
-#define BCM_ERROR_BM 0x685C
+#define BCM_ERROR_BM 0x681C
+#define BCM_OFF_BM 0x0040
 
 typedef struct BCMData{
     uint8_t bus_id;

@@ -137,9 +137,14 @@ void VehicleXTSFactGroup::_setStatus(unsigned int busnum, uint16_t status_word)
         QString status = QString("Fail 0x%1").arg(status_word,4,16,QLatin1Char('0'));
         getStatusFact(busnum)->setRawValue(status);
     }
+    else if((status_word & BCM_OFF_BM) != 0)
+    {
+        QString status = QString("Off 0x%1").arg(status_word,4,16,QLatin1Char('0'));
+        getStatusFact(busnum)->setRawValue(status);
+    }
     else
     {
-        QString status = QString("Ok 0x%1").arg(status_word,4,16,QLatin1Char('0'));
+        QString status = QString("On 0x%1").arg(status_word,4,16,QLatin1Char('0'));
         getStatusFact(busnum)->setRawValue(status);
     }
 }
