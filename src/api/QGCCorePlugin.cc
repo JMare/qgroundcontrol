@@ -355,12 +355,12 @@ void QGCCorePlugin::factValueGridCreateDefaultSettings(const QString& defaultSet
 
     value = column->value<InstrumentValueData*>(rowIndex++);
     value->setFact("Xts", "Bcm1status");
-    value->setText("BCM0");
+    value->setText("BCM1");
     value->setShowUnits(true);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
     value->setFact("Xts", "Bcm2status");
-    value->setText("BCM0");
+    value->setText("BCM2");
     value->setShowUnits(true);
 
     rowIndex    = 0;

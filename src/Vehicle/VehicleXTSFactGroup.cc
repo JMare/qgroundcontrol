@@ -44,9 +44,9 @@ VehicleXTSFactGroup::VehicleXTSFactGroup(QObject* parent)
     _addFact(&_bcm2PowerFact,       _bcm2PowerFactName);
 
     // Start out as not available "--.--"
-    _bcm0StatusFact.setRawValue      ("NO DATA");
-    _bcm1StatusFact.setRawValue      ("NO DATA");
-    _bcm2StatusFact.setRawValue      ("NO DATA");
+    _bcm0StatusFact.setRawValue      ("No Data");
+    _bcm1StatusFact.setRawValue      ("No Data");
+    _bcm2StatusFact.setRawValue      ("No Data");
     _bcm0TempFact.setRawValue      (0);
     _bcm1TempFact.setRawValue      (0);
     _bcm2TempFact.setRawValue      (0);
@@ -73,6 +73,19 @@ void VehicleXTSFactGroup::_handleData16(mavlink_message_t& message)
     mavlink_msg_data16_decode(&message, &data16);
     if(data16.len != 16)
         return;
+
+    /* Check for APU ready placeholder messages */
+    if(data16.type == 0x99)
+    {
+        _handleReady();
+        return;
+    }
+
+    /* Ensure our message has a valid busid */
+    if(data16.type != 0x50 && data16.type != 0x51 && data16.type != 0x52)
+        return;
+
+    /* If we got this far we have a valid BCM telemetry message to unpack */
     BCMData_t tmpdata;
     tmpdata.bus_id = data16.type;
     tmpdata.status_word = data16.data[0] | (data16.data[1] << 8);
@@ -104,35 +117,31 @@ void VehicleXTSFactGroup::_handleData16(mavlink_message_t& message)
     getTempFact(bus_num)->setRawValue(tmpdata.temp);
     getPowerFact(bus_num)->setRawValue(tmpdata.pout);
 
-    bcmdata[bus_num] = tmpdata;
-    bcmgotvalues[bus_num] = true;
+    _setTelemetryAvailable(true);
 
-    if(bcmgotvalues[0] && bcmgotvalues[1] && bcmgotvalues[2])
-    {
-        _handleBCMTelemetry();
-    }
-    //aputemperature()->setRawValue(45);
-    //apuhvcurrent()->setRawValue(5);
-    //_setTelemetryAvailable(true);
+}
+
+void VehicleXTSFactGroup::_handleReady(void)
+{
+    QString status = QString("Ready");
+    getStatusFact(0)->setRawValue(status);
+    getStatusFact(1)->setRawValue(status);
+    getStatusFact(2)->setRawValue(status);
+    _setTelemetryAvailable(true);
 }
 
 void VehicleXTSFactGroup::_setStatus(unsigned int busnum, uint16_t status_word)
 {
     if((status_word & BCM_ERROR_BM) != 0)
     {
-        QString status = QString("OK 0x%1").arg(status_word,4,16,QLatin1Char('0'));
+        QString status = QString("Fail 0x%1").arg(status_word,4,16,QLatin1Char('0'));
         getStatusFact(busnum)->setRawValue(status);
     }
     else
     {
-        getStatusFact(busnum)->setRawValue("FAIL");
+        QString status = QString("Ok 0x%1").arg(status_word,4,16,QLatin1Char('0'));
+        getStatusFact(busnum)->setRawValue(status);
     }
-}
-void VehicleXTSFactGroup::_handleBCMTelemetry(void)
-{
-    //aputemperature()->setRawValue(bcmdata[0].temp);
-    for(int i = 0; i < 3; i++)
-        bcmgotvalues[i] = false;
 }
 
 Fact* VehicleXTSFactGroup::getStatusFact(unsigned int bcmnum)

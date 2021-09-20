@@ -71,7 +71,6 @@ public:
 
 private:
     void _handleData16  (mavlink_message_t& message);
-    void _handleBCMTelemetry(void);
 
     Fact            _bcm0StatusFact;
     Fact            _bcm1StatusFact;
@@ -87,6 +86,6 @@ private:
     Fact* getPowerFact(unsigned int bcmnum);
     Fact* getTempFact(unsigned int bcmnum);
     void _setStatus(unsigned int busnum, uint16_t status_word);
-    bool bcmgotvalues[3];
-    BCMData_t bcmdata[3];
+    void _handleReady(void);
+
 };
