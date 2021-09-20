@@ -4,18 +4,61 @@
     "QGC.MetaData.Facts":
 [
 {
-    "name":             "aputemperature",
-    "shortDesc": "APU Temp",
+    "name":             "bcm0temp",
+    "shortDesc": "BCM0 Temp",
     "type":             "uint16",
     "decimalPlaces":    0,
     "units":            "C"
 },
 {
-    "name":             "apuhvcurrent",
-    "shortDesc": "HV Current",
-    "type":             "float",
-    "decimalPlaces":    1,
-    "units":            "A"
+    "name":             "bcm1temp",
+    "shortDesc": "BCM1 Temp",
+    "type":             "uint16",
+    "decimalPlaces":    0,
+    "units":            "C"
+},
+{
+    "name":             "bcm2temp",
+    "shortDesc": "BCM2 Temp",
+    "type":             "uint16",
+    "decimalPlaces":    0,
+    "units":            "C"
+},
+{
+    "name":             "bcm0power",
+    "shortDesc": "BCM0 Power",
+    "type":             "uint16",
+    "decimalPlaces":    0,
+    "units":            "W"
+},
+{
+    "name":             "bcm1power",
+    "shortDesc": "BCM1 Power",
+    "type":             "uint16",
+    "decimalPlaces":    0,
+    "units":            "W"
+},
+{
+    "name":             "bcm2power",
+    "shortDesc": "BCM2 Power",
+    "type":             "uint16",
+    "decimalPlaces":    0,
+    "units":            "W"
+},
+{
+    "name":             "bcm0status",
+    "shortDesc": "BCM0 Status",
+    "type":             "string"
+},
+{
+    "name":             "bcm1status",
+    "shortDesc": "BCM1 Status",
+    "type":             "string"
+},
+{
+    "name":             "bcm2status",
+    "shortDesc": "BCM2 Status",
+    "type":             "string"
 }
 ]
 }

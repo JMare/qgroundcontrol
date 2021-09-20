@@ -300,9 +300,13 @@ void QGCCorePlugin::factValueGridCreateDefaultSettings(const QString& defaultSet
     factValueGrid.appendColumn();
     factValueGrid.appendColumn();
     factValueGrid.appendColumn();
+    factValueGrid.appendColumn();
+    factValueGrid.appendColumn();
+
     if (includeFWValues) {
         factValueGrid.appendColumn();
     }
+    factValueGrid.appendRow();
     factValueGrid.appendRow();
 
     int                 rowIndex    = 0;
@@ -310,60 +314,89 @@ void QGCCorePlugin::factValueGridCreateDefaultSettings(const QString& defaultSet
 
     InstrumentValueData* value = column->value<InstrumentValueData*>(rowIndex++);
     value->setFact("Vehicle", "AltitudeRelative");
-    value->setIcon("arrow-thick-up.svg");
-    value->setText(value->fact()->shortDescription());
+    value->setText("Altitude");
     value->setShowUnits(true);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
     value->setFact("Vehicle", "DistanceToHome");
-    value->setIcon("bookmark copy 3.svg");
-    value->setText(value->fact()->shortDescription());
+    value->setText("DistHome");
     value->setShowUnits(true);
+
+    value = column->value<InstrumentValueData*>(rowIndex++);
+    value->setFact("Vehicle", "FlightTime");
+    value->setText("FlightTime");
+    value->setShowUnits(false);
 
     rowIndex    = 0;
     column      = factValueGrid.columns()->value<QmlObjectListModel*>(1);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
     value->setFact("Vehicle", "ClimbRate");
-    value->setIcon("arrow-simple-up.svg");
-    value->setText(value->fact()->shortDescription());
+    value->setText("ClimbRate");
     value->setShowUnits(true);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
     value->setFact("Vehicle", "GroundSpeed");
-    value->setIcon("arrow-simple-right.svg");
-    value->setText(value->fact()->shortDescription());
+    value->setText("GroundSpd");
     value->setShowUnits(true);
-
-
-    if (includeFWValues) {
-        rowIndex    = 0;
-        column      = factValueGrid.columns()->value<QmlObjectListModel*>(2);
-
-        value = column->value<InstrumentValueData*>(rowIndex++);
-        value->setFact("Vehicle", "AirSpeed");
-        value->setText("AirSpd");
-        value->setShowUnits(true);
-
-        value = column->value<InstrumentValueData*>(rowIndex++);
-        value->setFact("Vehicle", "ThrottlePct");
-        value->setText("Thr");
-        value->setShowUnits(true);
-    }
-
-    rowIndex    = 0;
-    column      = factValueGrid.columns()->value<QmlObjectListModel*>(includeFWValues ? 3 : 2);
-
-    value = column->value<InstrumentValueData*>(rowIndex++);
-    value->setFact("Vehicle", "FlightTime");
-    value->setIcon("timer.svg");
-    value->setText(value->fact()->shortDescription());
-    value->setShowUnits(false);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
     value->setFact("Vehicle", "FlightDistance");
-    value->setIcon("travel-walk.svg");
-    value->setText(value->fact()->shortDescription());
+    value->setText("FltDist");
+    value->setShowUnits(true);
+
+    rowIndex    = 0;
+    column      = factValueGrid.columns()->value<QmlObjectListModel*>(2);
+
+    value = column->value<InstrumentValueData*>(rowIndex++);
+    value->setFact("Xts", "Bcm0status");
+    value->setText("BCM0");
+    value->setShowUnits(true);
+
+    value = column->value<InstrumentValueData*>(rowIndex++);
+    value->setFact("Xts", "Bcm1status");
+    value->setText("BCM0");
+    value->setShowUnits(true);
+
+    value = column->value<InstrumentValueData*>(rowIndex++);
+    value->setFact("Xts", "Bcm2status");
+    value->setText("BCM0");
+    value->setShowUnits(true);
+
+    rowIndex    = 0;
+    column      = factValueGrid.columns()->value<QmlObjectListModel*>(3);
+
+    value = column->value<InstrumentValueData*>(rowIndex++);
+    value->setFact("Xts", "Bcm0temp");
+    value->setText("Temp");
+    value->setShowUnits(true);
+
+    value = column->value<InstrumentValueData*>(rowIndex++);
+    value->setFact("Xts", "Bcm1temp");
+    value->setText("Temp");
+    value->setShowUnits(true);
+
+    value = column->value<InstrumentValueData*>(rowIndex++);
+    value->setFact("Xts", "Bcm2temp");
+    value->setText("Temp");
+    value->setShowUnits(true);
+
+    rowIndex    = 0;
+    column      = factValueGrid.columns()->value<QmlObjectListModel*>(4);
+
+    value = column->value<InstrumentValueData*>(rowIndex++);
+    value->setFact("Xts", "Bcm0power");
+    value->setText("Power");
+    value->setShowUnits(true);
+
+    value = column->value<InstrumentValueData*>(rowIndex++);
+    value->setFact("Xts", "Bcm1power");
+    value->setText("Power");
+    value->setShowUnits(true);
+
+    value = column->value<InstrumentValueData*>(rowIndex++);
+    value->setFact("Xts", "Bcm2power");
+    value->setText("Power");
     value->setShowUnits(true);
 }
 
