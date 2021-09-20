@@ -10,14 +10,14 @@
 #include "VehicleXTSFactGroup.h"
 #include "Vehicle.h"
 
-const char* VehicleXTSFactGroup::_apuTemperatureFactName =      "apuemperature";
+const char* VehicleXTSFactGroup::_apuTemperatureFactName =      "aputemperature";
 const char* VehicleXTSFactGroup::_apuHVCurrentFactName =      "apuhvcurrent";
 
 
 VehicleXTSFactGroup::VehicleXTSFactGroup(QObject* parent)
     : FactGroup(1000, ":/json/Vehicle/XTSFact.json", parent)
-    , _apuTemperatureFact    (0, _apuTemperatureFactName,     FactMetaData::valueTypeDouble)
-    , _apuHVCurrentFact    (0, _apuHVCurrentFactName,     FactMetaData::valueTypeDouble)
+    , _apuTemperatureFact    (0, _apuTemperatureFactName,     FactMetaData::valueTypeUint16)
+    , _apuHVCurrentFact    (0, _apuHVCurrentFactName,     FactMetaData::valueTypeFloat)
 {
     _addFact(&_apuTemperatureFact,       _apuTemperatureFactName);
     _addFact(&_apuHVCurrentFact,       _apuHVCurrentFactName);

@@ -6,15 +6,15 @@
 {
     "name":             "aputemperature",
     "shortDesc": "APU Temp",
-    "type":             "double",
-    "decimalPlaces":    2,
+    "type":             "uint16",
+    "decimalPlaces":    0,
     "units":            "C"
 },
 {
-    "name":             "apuhvCurrent",
+    "name":             "apuhvcurrent",
     "shortDesc": "HV Current",
-    "type":             "double",
-    "decimalPlaces":    2,
+    "type":             "float",
+    "decimalPlaces":    1,
     "units":            "A"
 }
 ]
