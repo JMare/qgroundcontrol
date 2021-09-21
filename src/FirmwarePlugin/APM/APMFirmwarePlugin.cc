@@ -812,6 +812,18 @@ bool APMFirmwarePlugin::_guidedModeTakeoff(Vehicle* vehicle, double altitudeRel)
         return false;
     }
 
+    /* Delay to allow motors to spin up */
+    for (int i=0; i<15; i++) {
+        QGC::SLEEP::msleep(100);
+        qgcApp()->processEvents(QEventLoop::ExcludeUserInputEvents);
+    }
+
+    /* Check vehicle is still armed after delay */
+    if(!vehicle->armed()) {
+        qgcApp()->showAppMessage(tr("Unable to takeoff: Vehicle disarmed before takeoff."));
+        return false;
+    }
+
     vehicle->sendMavCommand(vehicle->defaultComponentId(),
                             MAV_CMD_NAV_TAKEOFF,
                             true, // show error
