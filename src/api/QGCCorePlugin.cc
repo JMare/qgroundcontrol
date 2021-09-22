@@ -331,53 +331,53 @@ void QGCCorePlugin::factValueGridCreateDefaultSettings(const QString& defaultSet
     column      = factValueGrid.columns()->value<QmlObjectListModel*>(1);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
-    value->setFact("Vehicle", "ClimbRate");
-    value->setText("ClimbRate");
+    value->setFact("Battery0", "Voltage");
+    value->setText("Voltage");
     value->setShowUnits(true);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
-    value->setFact("Vehicle", "GroundSpeed");
-    value->setText("GroundSpd");
+    value->setFact("Battery0", "Current");
+    value->setText("HV Current");
     value->setShowUnits(true);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
-    value->setFact("Vehicle", "FlightDistance");
-    value->setText("FltDist");
+    value->setFact("Battery1", "Current");
+    value->setText("Batt Current");
     value->setShowUnits(true);
 
     rowIndex    = 0;
     column      = factValueGrid.columns()->value<QmlObjectListModel*>(2);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
-    value->setFact("Xts", "Bcm0status");
-    value->setText("BCM0");
+    value->setFact("Xts", "Hvm0status");
+    value->setText("HVM0");
     value->setShowUnits(true);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
-    value->setFact("Xts", "Bcm1status");
-    value->setText("BCM1");
+    value->setFact("Xts", "Hvm1status");
+    value->setText("HVM1");
     value->setShowUnits(true);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
-    value->setFact("Xts", "Bcm2status");
-    value->setText("BCM2");
+    value->setFact("Xts", "Hvm2status");
+    value->setText("HVM2");
     value->setShowUnits(true);
 
     rowIndex    = 0;
     column      = factValueGrid.columns()->value<QmlObjectListModel*>(3);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
-    value->setFact("Xts", "Bcm0temp");
+    value->setFact("Xts", "Hvm0temp");
     value->setText("Temp");
     value->setShowUnits(true);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
-    value->setFact("Xts", "Bcm1temp");
+    value->setFact("Xts", "Hvm1temp");
     value->setText("Temp");
     value->setShowUnits(true);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
-    value->setFact("Xts", "Bcm2temp");
+    value->setFact("Xts", "Hvm2temp");
     value->setText("Temp");
     value->setShowUnits(true);
 
@@ -385,17 +385,17 @@ void QGCCorePlugin::factValueGridCreateDefaultSettings(const QString& defaultSet
     column      = factValueGrid.columns()->value<QmlObjectListModel*>(4);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
-    value->setFact("Xts", "Bcm0power");
+    value->setFact("Xts", "Hvm0power");
     value->setText("Power");
     value->setShowUnits(true);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
-    value->setFact("Xts", "Bcm1power");
+    value->setFact("Xts", "Hvm1power");
     value->setText("Power");
     value->setShowUnits(true);
 
     value = column->value<InstrumentValueData*>(rowIndex++);
-    value->setFact("Xts", "Bcm2power");
+    value->setFact("Xts", "Hvm2power");
     value->setText("Power");
     value->setShowUnits(true);
 }

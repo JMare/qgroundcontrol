@@ -4,60 +4,60 @@
     "QGC.MetaData.Facts":
 [
 {
-    "name":             "bcm0temp",
-    "shortDesc": "BCM0 Temp",
+    "name":             "hvm0temp",
+    "shortDesc": "HVM0 Temp",
     "type":             "uint16",
     "decimalPlaces":    0,
     "units":            "C"
 },
 {
-    "name":             "bcm1temp",
-    "shortDesc": "BCM1 Temp",
+    "name":             "hvm1temp",
+    "shortDesc": "HVM1 Temp",
     "type":             "uint16",
     "decimalPlaces":    0,
     "units":            "C"
 },
 {
-    "name":             "bcm2temp",
-    "shortDesc": "BCM2 Temp",
+    "name":             "hvm2temp",
+    "shortDesc": "HVM2 Temp",
     "type":             "uint16",
     "decimalPlaces":    0,
     "units":            "C"
 },
 {
-    "name":             "bcm0power",
-    "shortDesc": "BCM0 Power",
+    "name":             "hvm0power",
+    "shortDesc": "HVM0 Power",
     "type":             "uint16",
     "decimalPlaces":    0,
     "units":            "W"
 },
 {
-    "name":             "bcm1power",
-    "shortDesc": "BCM1 Power",
+    "name":             "hvm1power",
+    "shortDesc": "HVM1 Power",
     "type":             "uint16",
     "decimalPlaces":    0,
     "units":            "W"
 },
 {
-    "name":             "bcm2power",
-    "shortDesc": "BCM2 Power",
+    "name":             "hvm2power",
+    "shortDesc": "HVM2 Power",
     "type":             "uint16",
     "decimalPlaces":    0,
     "units":            "W"
 },
 {
-    "name":             "bcm0status",
-    "shortDesc": "BCM0 Status",
+    "name":             "hvm0status",
+    "shortDesc": "HVM0 Status",
     "type":             "string"
 },
 {
-    "name":             "bcm1status",
-    "shortDesc": "BCM1 Status",
+    "name":             "hvm1status",
+    "shortDesc": "HVM1 Status",
     "type":             "string"
 },
 {
-    "name":             "bcm2status",
-    "shortDesc": "BCM2 Status",
+    "name":             "hvm2status",
+    "shortDesc": "HVM2 Status",
     "type":             "string"
 }
 ]

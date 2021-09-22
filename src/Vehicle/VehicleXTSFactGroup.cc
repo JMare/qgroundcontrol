@@ -11,48 +11,48 @@
 #include "Vehicle.h"
 #include <QString>
 
-const char* VehicleXTSFactGroup::_bcm0StatusFactName =      "bcm0status";
-const char* VehicleXTSFactGroup::_bcm1StatusFactName =      "bcm1status";
-const char* VehicleXTSFactGroup::_bcm2StatusFactName =      "bcm2status";
-const char* VehicleXTSFactGroup::_bcm0TempFactName =      "bcm0temp";
-const char* VehicleXTSFactGroup::_bcm1TempFactName =      "bcm1temp";
-const char* VehicleXTSFactGroup::_bcm2TempFactName =      "bcm2temp";
-const char* VehicleXTSFactGroup::_bcm0PowerFactName =      "bcm0power";
-const char* VehicleXTSFactGroup::_bcm1PowerFactName =      "bcm1power";
-const char* VehicleXTSFactGroup::_bcm2PowerFactName =      "bcm2power";
+const char* VehicleXTSFactGroup::_hvm0StatusFactName =      "hvm0status";
+const char* VehicleXTSFactGroup::_hvm1StatusFactName =      "hvm1status";
+const char* VehicleXTSFactGroup::_hvm2StatusFactName =      "hvm2status";
+const char* VehicleXTSFactGroup::_hvm0TempFactName =      "hvm0temp";
+const char* VehicleXTSFactGroup::_hvm1TempFactName =      "hvm1temp";
+const char* VehicleXTSFactGroup::_hvm2TempFactName =      "hvm2temp";
+const char* VehicleXTSFactGroup::_hvm0PowerFactName =      "hvm0power";
+const char* VehicleXTSFactGroup::_hvm1PowerFactName =      "hvm1power";
+const char* VehicleXTSFactGroup::_hvm2PowerFactName =      "hvm2power";
 
 VehicleXTSFactGroup::VehicleXTSFactGroup(QObject* parent)
     : FactGroup(1000, ":/json/Vehicle/XTSFact.json", parent)
-    , _bcm0StatusFact    (0, _bcm0StatusFactName,     FactMetaData::valueTypeString)
-    , _bcm1StatusFact    (0, _bcm1StatusFactName,     FactMetaData::valueTypeString)
-    , _bcm2StatusFact    (0, _bcm2StatusFactName,     FactMetaData::valueTypeString)
-    , _bcm0TempFact    (0, _bcm0TempFactName,     FactMetaData::valueTypeUint16)
-    , _bcm1TempFact    (0, _bcm1TempFactName,     FactMetaData::valueTypeUint16)
-    , _bcm2TempFact    (0, _bcm2TempFactName,     FactMetaData::valueTypeUint16)
-    , _bcm0PowerFact    (0, _bcm0PowerFactName,     FactMetaData::valueTypeUint16)
-    , _bcm1PowerFact    (0, _bcm1PowerFactName,     FactMetaData::valueTypeUint16)
-    , _bcm2PowerFact    (0, _bcm2PowerFactName,     FactMetaData::valueTypeUint16)
+    , _hvm0StatusFact    (0, _hvm0StatusFactName,     FactMetaData::valueTypeString)
+    , _hvm1StatusFact    (0, _hvm1StatusFactName,     FactMetaData::valueTypeString)
+    , _hvm2StatusFact    (0, _hvm2StatusFactName,     FactMetaData::valueTypeString)
+    , _hvm0TempFact    (0, _hvm0TempFactName,     FactMetaData::valueTypeUint16)
+    , _hvm1TempFact    (0, _hvm1TempFactName,     FactMetaData::valueTypeUint16)
+    , _hvm2TempFact    (0, _hvm2TempFactName,     FactMetaData::valueTypeUint16)
+    , _hvm0PowerFact    (0, _hvm0PowerFactName,     FactMetaData::valueTypeUint16)
+    , _hvm1PowerFact    (0, _hvm1PowerFactName,     FactMetaData::valueTypeUint16)
+    , _hvm2PowerFact    (0, _hvm2PowerFactName,     FactMetaData::valueTypeUint16)
 {
-    _addFact(&_bcm0StatusFact,       _bcm0StatusFactName);
-    _addFact(&_bcm1StatusFact,       _bcm1StatusFactName);
-    _addFact(&_bcm2StatusFact,       _bcm2StatusFactName);
-    _addFact(&_bcm0TempFact,       _bcm0TempFactName);
-    _addFact(&_bcm1TempFact,       _bcm1TempFactName);
-    _addFact(&_bcm2TempFact,       _bcm2TempFactName);
-    _addFact(&_bcm0PowerFact,       _bcm0PowerFactName);
-    _addFact(&_bcm1PowerFact,       _bcm1PowerFactName);
-    _addFact(&_bcm2PowerFact,       _bcm2PowerFactName);
+    _addFact(&_hvm0StatusFact,       _hvm0StatusFactName);
+    _addFact(&_hvm1StatusFact,       _hvm1StatusFactName);
+    _addFact(&_hvm2StatusFact,       _hvm2StatusFactName);
+    _addFact(&_hvm0TempFact,       _hvm0TempFactName);
+    _addFact(&_hvm1TempFact,       _hvm1TempFactName);
+    _addFact(&_hvm2TempFact,       _hvm2TempFactName);
+    _addFact(&_hvm0PowerFact,       _hvm0PowerFactName);
+    _addFact(&_hvm1PowerFact,       _hvm1PowerFactName);
+    _addFact(&_hvm2PowerFact,       _hvm2PowerFactName);
 
     // Start out as not available "--.--"
-    _bcm0StatusFact.setRawValue      ("No Data");
-    _bcm1StatusFact.setRawValue      ("No Data");
-    _bcm2StatusFact.setRawValue      ("No Data");
-    _bcm0TempFact.setRawValue      (0);
-    _bcm1TempFact.setRawValue      (0);
-    _bcm2TempFact.setRawValue      (0);
-    _bcm0PowerFact.setRawValue      (0);
-    _bcm1PowerFact.setRawValue      (0);
-    _bcm2PowerFact.setRawValue      (0);
+    _hvm0StatusFact.setRawValue      ("No Data");
+    _hvm1StatusFact.setRawValue      ("No Data");
+    _hvm2StatusFact.setRawValue      ("No Data");
+    _hvm0TempFact.setRawValue      (0);
+    _hvm1TempFact.setRawValue      (0);
+    _hvm2TempFact.setRawValue      (0);
+    _hvm0PowerFact.setRawValue      (0);
+    _hvm1PowerFact.setRawValue      (0);
+    _hvm2PowerFact.setRawValue      (0);
 }
 
 void VehicleXTSFactGroup::handleMessage(Vehicle* /* vehicle */, mavlink_message_t& message)
@@ -85,8 +85,8 @@ void VehicleXTSFactGroup::_handleData16(mavlink_message_t& message)
     if(data16.type != 0x50 && data16.type != 0x51 && data16.type != 0x52)
         return;
 
-    /* If we got this far we have a valid BCM telemetry message to unpack */
-    BCMData_t tmpdata;
+    /* If we got this far we have a valid hvm telemetry message to unpack */
+    hvmData_t tmpdata;
     tmpdata.bus_id = data16.type;
     tmpdata.status_word = data16.data[0] | (data16.data[1] << 8);
     tmpdata.temp = data16.data[2] | (data16.data[3] << 8);
@@ -132,12 +132,12 @@ void VehicleXTSFactGroup::_handleReady(void)
 
 void VehicleXTSFactGroup::_setStatus(unsigned int busnum, uint16_t status_word)
 {
-    if((status_word & BCM_ERROR_BM) != 0)
+    if((status_word & HVM_ERROR_BM) != 0)
     {
         QString status = QString("Fail 0x%1").arg(status_word,4,16,QLatin1Char('0'));
         getStatusFact(busnum)->setRawValue(status);
     }
-    else if((status_word & BCM_OFF_BM) != 0)
+    else if((status_word & HVM_OFF_BM) != 0)
     {
         QString status = QString("Off 0x%1").arg(status_word,4,16,QLatin1Char('0'));
         getStatusFact(busnum)->setRawValue(status);
@@ -149,32 +149,32 @@ void VehicleXTSFactGroup::_setStatus(unsigned int busnum, uint16_t status_word)
     }
 }
 
-Fact* VehicleXTSFactGroup::getStatusFact(unsigned int bcmnum)
+Fact* VehicleXTSFactGroup::getStatusFact(unsigned int hvmnum)
 {
-    if(bcmnum == 0)
-        return &_bcm0StatusFact;
-    else if(bcmnum == 1)
-        return &_bcm1StatusFact;
+    if(hvmnum == 0)
+        return &_hvm0StatusFact;
+    else if(hvmnum == 1)
+        return &_hvm1StatusFact;
     else
-        return &_bcm2StatusFact;
+        return &_hvm2StatusFact;
 }
 
-Fact* VehicleXTSFactGroup::getPowerFact(unsigned int bcmnum)
+Fact* VehicleXTSFactGroup::getPowerFact(unsigned int hvmnum)
 {
-    if(bcmnum == 0)
-        return &_bcm0PowerFact;
-    else if(bcmnum == 1)
-        return &_bcm1PowerFact;
+    if(hvmnum == 0)
+        return &_hvm0PowerFact;
+    else if(hvmnum == 1)
+        return &_hvm1PowerFact;
     else
-        return &_bcm2PowerFact;
+        return &_hvm2PowerFact;
 }
 
-Fact* VehicleXTSFactGroup::getTempFact(unsigned int bcmnum)
+Fact* VehicleXTSFactGroup::getTempFact(unsigned int hvmnum)
 {
-    if(bcmnum == 0)
-        return &_bcm0TempFact;
-    else if(bcmnum == 1)
-        return &_bcm1TempFact;
+    if(hvmnum == 0)
+        return &_hvm0TempFact;
+    else if(hvmnum == 1)
+        return &_hvm1TempFact;
     else
-        return &_bcm2TempFact;
+        return &_hvm2TempFact;
 }

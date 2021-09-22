@@ -12,10 +12,10 @@
 #include "FactGroup.h"
 #include "QGCMAVLink.h"
 
-#define BCM_ERROR_BM 0x681C
-#define BCM_OFF_BM 0x0040
+#define HVM_ERROR_BM 0x681C
+#define HVM_OFF_BM 0x0040
 
-typedef struct BCMData{
+typedef struct hvmData{
     uint8_t bus_id;
     uint16_t status_word;
     uint16_t temp;
@@ -24,7 +24,7 @@ typedef struct BCMData{
     uint16_t iin;
     uint16_t iout;
     uint16_t pout;
-    } BCMData_t;
+    } hvmData_t;
 
 class VehicleXTSFactGroup : public FactGroup
 {
@@ -33,38 +33,38 @@ class VehicleXTSFactGroup : public FactGroup
 public:
     VehicleXTSFactGroup(QObject* parent = nullptr);
 
-    Q_PROPERTY(Fact* bcm0status       READ bcm0status       CONSTANT)
-    Q_PROPERTY(Fact* bcm1status       READ bcm1status       CONSTANT)
-    Q_PROPERTY(Fact* bcm2status       READ bcm2status       CONSTANT)
-    Q_PROPERTY(Fact* bcm0temp       READ bcm0temp       CONSTANT)
-    Q_PROPERTY(Fact* bcm1temp       READ bcm1temp       CONSTANT)
-    Q_PROPERTY(Fact* bcm2temp       READ bcm2temp       CONSTANT)
-    Q_PROPERTY(Fact* bcm0power       READ bcm0power       CONSTANT)
-    Q_PROPERTY(Fact* bcm1power       READ bcm1power       CONSTANT)
-    Q_PROPERTY(Fact* bcm2power       READ bcm2power       CONSTANT)
+    Q_PROPERTY(Fact* hvm0status       READ hvm0status       CONSTANT)
+    Q_PROPERTY(Fact* hvm1status       READ hvm1status       CONSTANT)
+    Q_PROPERTY(Fact* hvm2status       READ hvm2status       CONSTANT)
+    Q_PROPERTY(Fact* hvm0temp       READ hvm0temp       CONSTANT)
+    Q_PROPERTY(Fact* hvm1temp       READ hvm1temp       CONSTANT)
+    Q_PROPERTY(Fact* hvm2temp       READ hvm2temp       CONSTANT)
+    Q_PROPERTY(Fact* hvm0power       READ hvm0power       CONSTANT)
+    Q_PROPERTY(Fact* hvm1power       READ hvm1power       CONSTANT)
+    Q_PROPERTY(Fact* hvm2power       READ hvm2power       CONSTANT)
 
-    Fact* bcm0status () { return &_bcm0StatusFact; }
-    Fact* bcm1status () { return &_bcm1StatusFact; }
-    Fact* bcm2status () { return &_bcm2StatusFact; }
-    Fact* bcm0temp () { return &_bcm0TempFact; }
-    Fact* bcm1temp () { return &_bcm1TempFact; }
-    Fact* bcm2temp () { return &_bcm2TempFact; }
-    Fact* bcm0power () { return &_bcm0PowerFact; }
-    Fact* bcm1power () { return &_bcm1PowerFact; }
-    Fact* bcm2power () { return &_bcm2PowerFact; }
+    Fact* hvm0status () { return &_hvm0StatusFact; }
+    Fact* hvm1status () { return &_hvm1StatusFact; }
+    Fact* hvm2status () { return &_hvm2StatusFact; }
+    Fact* hvm0temp () { return &_hvm0TempFact; }
+    Fact* hvm1temp () { return &_hvm1TempFact; }
+    Fact* hvm2temp () { return &_hvm2TempFact; }
+    Fact* hvm0power () { return &_hvm0PowerFact; }
+    Fact* hvm1power () { return &_hvm1PowerFact; }
+    Fact* hvm2power () { return &_hvm2PowerFact; }
 
     // Overrides from FactGroup
     void handleMessage(Vehicle* vehicle, mavlink_message_t& message) override;
 
-    static const char* _bcm0StatusFactName;
-    static const char* _bcm1StatusFactName;
-    static const char* _bcm2StatusFactName;
-    static const char* _bcm0TempFactName;
-    static const char* _bcm1TempFactName;
-    static const char* _bcm2TempFactName;
-    static const char* _bcm0PowerFactName;
-    static const char* _bcm1PowerFactName;
-    static const char* _bcm2PowerFactName;
+    static const char* _hvm0StatusFactName;
+    static const char* _hvm1StatusFactName;
+    static const char* _hvm2StatusFactName;
+    static const char* _hvm0TempFactName;
+    static const char* _hvm1TempFactName;
+    static const char* _hvm2TempFactName;
+    static const char* _hvm0PowerFactName;
+    static const char* _hvm1PowerFactName;
+    static const char* _hvm2PowerFactName;
 
     static const char* _settingsGroup;
 
@@ -73,19 +73,19 @@ public:
 private:
     void _handleData16  (mavlink_message_t& message);
 
-    Fact            _bcm0StatusFact;
-    Fact            _bcm1StatusFact;
-    Fact            _bcm2StatusFact;
-    Fact            _bcm0TempFact;
-    Fact            _bcm1TempFact;
-    Fact            _bcm2TempFact;
-    Fact            _bcm0PowerFact;
-    Fact            _bcm1PowerFact;
-    Fact            _bcm2PowerFact;
+    Fact            _hvm0StatusFact;
+    Fact            _hvm1StatusFact;
+    Fact            _hvm2StatusFact;
+    Fact            _hvm0TempFact;
+    Fact            _hvm1TempFact;
+    Fact            _hvm2TempFact;
+    Fact            _hvm0PowerFact;
+    Fact            _hvm1PowerFact;
+    Fact            _hvm2PowerFact;
 
-    Fact* getStatusFact(unsigned int bcmnum);
-    Fact* getPowerFact(unsigned int bcmnum);
-    Fact* getTempFact(unsigned int bcmnum);
+    Fact* getStatusFact(unsigned int hvmnum);
+    Fact* getPowerFact(unsigned int hvmnum);
+    Fact* getTempFact(unsigned int hvmnum);
     void _setStatus(unsigned int busnum, uint16_t status_word);
     void _handleReady(void);
 

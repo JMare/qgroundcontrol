@@ -813,7 +813,7 @@ bool APMFirmwarePlugin::_guidedModeTakeoff(Vehicle* vehicle, double altitudeRel)
     }
 
     /* Delay to allow motors to spin up */
-    for (int i=0; i<15; i++) {
+    for (int i=0; i<20; i++) {
         QGC::SLEEP::msleep(100);
         qgcApp()->processEvents(QEventLoop::ExcludeUserInputEvents);
     }
