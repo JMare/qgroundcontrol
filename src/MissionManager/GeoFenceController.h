@@ -36,6 +36,7 @@ public:
     Q_PROPERTY(Fact*                breachReturnAltitude    READ breachReturnAltitude                               CONSTANT)
 
     // Hack to expose PX4 circular fence controlled by GF_MAX_HOR_DIST
+    // And APM Circular Fence controlled by FENCE_ENABLE, FENCE_TYPE and FENCE_RADIUS
     Q_PROPERTY(double               paramCircularFence  READ paramCircularFence                             NOTIFY paramCircularFenceChanged)
 
     /// Add a new inclusion polygon to the fence
@@ -115,10 +116,16 @@ private:
     double              _breachReturnDefaultAltitude =  qQNaN();
     bool                _itemsRequested =               false;
     Fact*               _px4ParamCircularFenceFact =    nullptr;
+    Fact*               _apmParamCircularFenceFact =    nullptr;
+    Fact*               _apmParamCircularFenceEnabledFact =    nullptr;
+    Fact*               _apmParamCircularFenceTypeFact =    nullptr;
 
     static QMap<QString, FactMetaData*> _metaDataMap;
 
     static const char* _px4ParamCircularFence;
+    static const char* _apmParamCircularFence;
+    static const char* _apmParamCircularFenceEnabled;
+    static const char* _apmParamCircularFenceType;
 
     static const int _jsonCurrentVersion = 2;
 
