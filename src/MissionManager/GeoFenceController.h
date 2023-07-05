@@ -116,14 +116,14 @@ private:
     double              _breachReturnDefaultAltitude =  qQNaN();
     bool                _itemsRequested =               false;
     Fact*               _px4ParamCircularFenceFact =    nullptr;
-    Fact*               _apmParamCircularFenceFact =    nullptr;
+    Fact*               _apmParamCircularFenceRadiusFact =    nullptr;
     Fact*               _apmParamCircularFenceEnabledFact =    nullptr;
     Fact*               _apmParamCircularFenceTypeFact =    nullptr;
 
     static QMap<QString, FactMetaData*> _metaDataMap;
 
     static const char* _px4ParamCircularFence;
-    static const char* _apmParamCircularFence;
+    static const char* _apmParamCircularFenceRadius;
     static const char* _apmParamCircularFenceEnabled;
     static const char* _apmParamCircularFenceType;
 
