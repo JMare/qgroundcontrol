@@ -24,7 +24,23 @@ Slider {
     property bool displayValue: false
     property bool indicatorBarVisible: true
 
+    stepSize: 10 // 10m
+    tickmarksEnabled: true
+
+
     style: SliderStyle {
+        tickmarks: Repeater {
+            id: repeater
+            model: control.stepSize > 0 ? 1 + (control.maximumValue - control.minimumValue) / control.stepSize : 0
+            Rectangle {
+                color: "red"
+                width: 10 ; height: 10
+                y: repeater.height
+                x: 10
+                //x: styleData.handleWidth / 2 + index * ((repeater.width - styleData.handleWidth) / (repeater.count-1))
+            }
+        }
+
         groove: Item {
             anchors.verticalCenter: parent.verticalCenter
             implicitWidth:          Math.round(ScreenTools.defaultFontPixelHeight * 4.5)
@@ -73,12 +89,15 @@ Slider {
 
             Label {
                 text:               _root.value.toFixed( _root.maximumValue <= 1 ? 1 : 0)
-                visible:            _root.displayValue
+                visible:            true
                 anchors.centerIn:   parent
                 font.family:        ScreenTools.normalFontFamily
                 font.pointSize:     ScreenTools.smallFontPointSize
                 color:              qgcPal.buttonText
             }
         }
+
+
+
     }
 }

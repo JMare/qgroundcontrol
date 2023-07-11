@@ -185,7 +185,7 @@ Item {
 
     function setupSlider(actionCode) {
         // generic defaults
-        guidedValueSlider.configureAsLinearSlider()
+        //guidedValueSlider.configureAsLinearSlider()
 
         if (actionCode === actionTakeoff) {
                 guidedValueSlider.setMinVal(_activeVehicle.minimumTakeoffAltitude())
@@ -205,7 +205,8 @@ Item {
             }
         } else if (actionCode === actionChangeAlt || actionCode === actionOrbit || actionCode === actionGoto || actionCode === actionPause) {
             guidedValueSlider.setDisplayText("New Alt(rel)")
-            guidedValueSlider.configureAsRelativeAltSliderExp()
+            guidedValueSlider.setValue(_activeVehicle.altitudeRelative.rawValue)
+            //guidedValueSlider.configureAsRelativeAltSliderExp()
         }
     }
 

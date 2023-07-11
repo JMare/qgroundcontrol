@@ -38,25 +38,8 @@ Rectangle {
     }
 
     function setValue(val) {
-        valueSlider.value = valueField.getSliderValueFromOutput(val)
+        valueSlider.value = val
         valueField.updateFunction(valueSlider.value)
-    }
-
-    function configureAsRelativeAltSliderExp() {
-        _sliderMaxVal = _flyViewSettings ? _flyViewSettings.guidedMaximumAltitude.rawValue : 0
-        _sliderMinVal = _flyViewSettings ? _flyViewSettings.guidedMinimumAltitude.rawValue : 0
-        _sliderCenterValue = Qt.binding(function() { return _vehicleAltitude })
-        _altSlider = true
-        valueField.updateFunction = valueField.updateExpAroundCenterValue
-        valueSlider.value = 0
-        valueField.updateFunction(sliderValue)
-
-    }
-
-    function configureAsLinearSlider() {
-        _altSlider = false
-        valueField.updateFunction = valueField.updateLinear
-
     }
 
     function setMinVal(min_val) {
@@ -76,11 +59,7 @@ Rectangle {
     }
 
     function getOutputValue() {
-        if (_altSlider) {
-            return valueField.newValue - _sliderCenterValue
-        } else {
-            return valueField.newValue
-        }
+        return valueField.newValue - _vehicleAltitude
     }
 
     Column {
@@ -106,41 +85,11 @@ Rectangle {
             property real   newValue
             property string newValueAppUnits
 
-            property var updateFunction : updateExpAroundCenterValue
-
-            function updateExpAroundCenterValue(value) {
-                var   decreaseRange = Math.max(_sliderCenterValue - _sliderMinVal, 0)
-                var   increaseRange = Math.max(_sliderMaxVal - _sliderCenterValue, 0)
-                var   valExp = Math.pow(valueSlider.value, 3)
-                var   delta = valExp * (valueSlider.value > 0 ? increaseRange : decreaseRange)
-                newValue = _sliderCenterValue + delta
-                newValueAppUnits = QGroundControl.unitsConversion.metersToAppSettingsHorizontalDistanceUnits(newValue).toFixed(1)
-            }
+            property var updateFunction : valueField.updateLinear
 
             function updateLinear(value) {
-                // value is between -1 and 1
-                newValue = _sliderMinVal + (value + 1) * 0.5 * (_sliderMaxVal - _sliderMinVal)
+                newValue = valueSlider.value
                 newValueAppUnits = QGroundControl.unitsConversion.metersToAppSettingsHorizontalDistanceUnits(newValue).toFixed(1)
-            }
-
-            function getSliderValueFromOutputLinear(val) {
-                return 2 * (val - _sliderMinVal) / (_sliderMaxVal - _sliderMinVal) - 1
-            }
-
-            function getSliderValueFromOutputExp(val) {
-                if (val >= _sliderCenterValue) {
-                    return Math.pow(val / Math.max(_sliderMaxVal - _sliderCenterValue, 0), 1.0/3.0)
-                } else {
-                    return -Math.pow(val / Math.max(_sliderCenterValue - _sliderMinVal, 0), 1.0/3.0)
-                }
-            }
-
-            function getSliderValueFromOutput(output) {
-                if (updateFunction == updateExpAroundCenterValue) {
-                    return getSliderValueFromOutputExp(output)
-                } else {
-                    return getSliderValueFromOutputLinear(output)
-                }
             }
         }
     }
@@ -153,8 +102,8 @@ Rectangle {
         anchors.left:       parent.left
         anchors.right:      parent.right
         orientation:        Qt.Vertical
-        minimumValue:       -1
-        maximumValue:       1
+        minimumValue:       _sliderMinVal
+        maximumValue:       _sliderMaxVal
         zeroCentered:       false
         rotation:           180
 
