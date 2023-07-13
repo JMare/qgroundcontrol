@@ -53,6 +53,19 @@ Rectangle {
 
     }
 
+    // Here I am attempting to setup the slider in the manner I want it for simple multirotor use
+    function configureAsAbsoluteSimpleAltSlider() {
+        _sliderMaxVal = _flyViewSettings ? _flyViewSettings.guidedMaximumAltitude.rawValue : 0
+        _sliderMinVal = 0
+        _sliderCenterValue = Qt.binding(function() { return _vehicleAltitude })
+        _altSlider = true
+
+        valueSlider.snapValue = 0.2
+        valueField.updateFunction = valueField.updateSimpleAlt
+        valueSlider.value = valueField.getSliderValueFromOutputLinear(_vehicleAltitude)
+        valueField.updateFunction(sliderValue)
+    }
+
     function configureAsLinearSlider() {
         _altSlider = false
         valueField.updateFunction = valueField.updateLinear
@@ -114,6 +127,20 @@ Rectangle {
                 var   valExp = Math.pow(valueSlider.value, 3)
                 var   delta = valExp * (valueSlider.value > 0 ? increaseRange : decreaseRange)
                 newValue = _sliderCenterValue + delta
+                newValueAppUnits = QGroundControl.unitsConversion.metersToAppSettingsHorizontalDistanceUnits(newValue).toFixed(1)
+            }
+
+            function updateSimpleAlt(value) {
+                // value is between -1 and 1
+                var newValueTmp = _sliderMinVal + (value + 1) * 0.5 * (_sliderMaxVal - _sliderMinVal)
+
+                if(newValueTmp < _flyViewSettings.guidedMinimumAltitude.rawValue-0.1){
+                    valueSlider.value = getSliderValueFromOutputLinear(_flyViewSettings.guidedMinimumAltitude.rawValue)
+                    return
+                }
+
+                newValue = _sliderMinVal + (value + 1) * 0.5 * (_sliderMaxVal - _sliderMinVal)
+
                 newValueAppUnits = QGroundControl.unitsConversion.metersToAppSettingsHorizontalDistanceUnits(newValue).toFixed(1)
             }
 

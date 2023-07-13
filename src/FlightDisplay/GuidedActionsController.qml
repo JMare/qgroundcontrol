@@ -205,7 +205,8 @@ Item {
             }
         } else if (actionCode === actionChangeAlt || actionCode === actionOrbit || actionCode === actionGoto || actionCode === actionPause) {
             guidedValueSlider.setDisplayText("New Alt(rel)")
-            guidedValueSlider.configureAsRelativeAltSliderExp()
+            //guidedValueSlider.configureAsRelativeAltSliderExp()
+            guidedValueSlider.configureAsAbsoluteSimpleAltSlider()
         }
     }
 
