@@ -34,17 +34,15 @@ Slider {
      //model: 20
      anchors.fill: parent
      model: stepSize > 0 ? 1 + (maximumValue - minimumValue) / stepSize : 0
+
      Rectangle {
          property real _hw: Math.round(_root.implicitHeight / 2)*2
 
-         color: "white"
+         color: qgcPal.buttonText
          width: 10 ; height: 2
          anchors.left: parent.horizontalCenter
          anchors.leftMargin: _hw
-         //x: Math.round(ScreenTools.defaultFontPixelHeight * 0.3)
-         //y: repeater.height
          y: -1 + _hw / 2 + index * ((ticksrepeater.height - _hw) / (ticksrepeater.count-1))
-         //x: styleData.handleWidth / 2 + index * ((repeater.width - styleData.handleWidth) / (repeater.count-1))
      }
     }
 

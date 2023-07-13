@@ -60,9 +60,21 @@ Rectangle {
         _sliderCenterValue = Qt.binding(function() { return _vehicleAltitude })
         _altSlider = true
 
-        valueSlider.snapValue = 0.2
+        valueSlider.snapValue = 1+valueField.getSliderValueFromOutputLinear(12.192)
         valueField.updateFunction = valueField.updateSimpleAlt
         valueSlider.value = valueField.getSliderValueFromOutputLinear(_vehicleAltitude)
+        valueField.updateFunction(sliderValue)
+    }
+
+    function configureAsAbsoluteSimpleTakeoffSlider() {
+        _sliderMaxVal = _flyViewSettings ? _flyViewSettings.guidedMaximumAltitude.rawValue : 0
+        _sliderMinVal = 0
+        _sliderCenterValue = Qt.binding(function() { return _vehicleAltitude })
+        //_altSlider = true
+
+        valueSlider.snapValue = 1+valueField.getSliderValueFromOutputLinear(12.192)
+        valueField.updateFunction = valueField.updateSimpleAlt
+        valueSlider.value = valueField.getSliderValueFromOutputLinear(_flyViewSettings.guidedMinimumAltitude.rawValue)
         valueField.updateFunction(sliderValue)
     }
 
