@@ -32,17 +32,48 @@ Slider {
     Repeater {
      id: ticksrepeater
      //model: 20
-     anchors.fill: parent
+     anchors.left: parent.left
+     anchors.right: parent.horizontalCenter
+     anchors.top: parent.top
+     anchors.bottom: parent.bottom
      model: stepSize > 0 ? 1 + (maximumValue - minimumValue) / stepSize : 0
+        /*Rectangle {
+            property real _hw: Math.round(_root.implicitHeight / 2)*2
 
+            color: qgcPal.buttonText
+            width: 10 ; height: 2
+            anchors.left: parent.left
+            anchors.leftMargin: _hw*2
+            y: -1 + _hw / 2 + index * ((ticksrepeater.height - _hw) / (ticksrepeater.count-1))
+        }*/
+     QGCLabel {
+         property real _hw: Math.round(_root.implicitHeight / 2)*2
+        property string thisheight: (((ticksrepeater.count-1)-index)*25).toString() + 'ft'
+         color: qgcPal.buttonText
+         text: thisheight
+         font.pointSize: ScreenTools.smallFontPointSize
+         anchors.right: ticksrepeater.right
+         anchors.rightMargin: _hw/1.5
+
+         y: -ScreenTools.smallFontPointSize+2 + _hw / 2 + index * ((ticksrepeater.height - _hw) / (ticksrepeater.count-1))
+     }
+    }
+    Repeater {
+     id: leftticksrepeater
+     //model: 20
+     anchors.right: parent.right
+     anchors.left: parent.horizontalCenter
+     anchors.top: parent.top
+     anchors.bottom: parent.bottom
+     model: stepSize > 0 ? 1 + (maximumValue - minimumValue) / stepSize : 0
      Rectangle {
          property real _hw: Math.round(_root.implicitHeight / 2)*2
 
          color: qgcPal.buttonText
-         width: 10 ; height: 2
-         anchors.left: parent.horizontalCenter
-         anchors.leftMargin: _hw
-         y: -1 + _hw / 2 + index * ((ticksrepeater.height - _hw) / (ticksrepeater.count-1))
+         width: 15 ; height: 1
+         anchors.left: leftticksrepeater.left
+         anchors.leftMargin: _hw/1.5
+         y: -1 + _hw / 2 + index * ((leftticksrepeater.height - _hw) / (leftticksrepeater.count-1))
      }
     }
 
@@ -95,7 +126,7 @@ Slider {
                 anchors.left:   parent.left
                 anchors.bottom:  parent.bottom
                 anchors.top:    parent.top
-                width:  parent.width/10
+                width:  parent.width/8
                 color: "red"
             }
 

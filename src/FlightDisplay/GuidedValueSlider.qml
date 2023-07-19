@@ -60,7 +60,7 @@ Rectangle {
         _sliderCenterValue = Qt.binding(function() { return _vehicleAltitude })
         _altSlider = true
 
-        valueSlider.snapValue = 1+valueField.getSliderValueFromOutputLinear(12.192)
+        valueSlider.snapValue = 1+valueField.getSliderValueFromOutputLinear(7.62)
         valueField.updateFunction = valueField.updateSimpleAlt
         valueSlider.value = valueField.getSliderValueFromOutputLinear(_vehicleAltitude)
         valueField.updateFunction(sliderValue)
@@ -72,7 +72,7 @@ Rectangle {
         _sliderCenterValue = Qt.binding(function() { return _vehicleAltitude })
         //_altSlider = true
 
-        valueSlider.snapValue = 1+valueField.getSliderValueFromOutputLinear(12.192)
+        valueSlider.snapValue = 1+valueField.getSliderValueFromOutputLinear(7.62)
         valueField.updateFunction = valueField.updateSimpleAlt
         valueSlider.value = valueField.getSliderValueFromOutputLinear(_flyViewSettings.guidedMinimumAltitude.rawValue)
         valueField.updateFunction(sliderValue)
