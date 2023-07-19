@@ -40,11 +40,24 @@ Item {
     property real _groundSpeed:         vehicle ? vehicle.groundSpeed.rawValue : 0
     property real _headingToNextWP:     vehicle ? vehicle.headingToNextWP.rawValue : 0
     property real _courseOverGround:    _activeVehicle ? _activeVehicle.gps.courseOverGround.rawValue : 0
+    property real _windDirection:       vehicle ? vehicle.wind.direction.rawValue : 0
+    property real _windSpeed:           vehicle ? vehicle.wind.speed.rawValue : 0
 
     property bool usedByMultipleVehicleList:  false
 
     function isCOGAngleOK(){
         if(_groundSpeed < 0.5){
+            return false
+        }
+        else{
+            return vehicle && _showAdditionalIndicatorsCompass
+        }
+    }
+
+    function isWindDirectionOK(){
+        // less than 5 knots or 2.5m/s we can consider calm and not display the arrow
+        // speeds less than this are likely to produce erratic directions anyway
+        if(_windSpeed < 2.5){
             return false
         }
         else{
@@ -110,6 +123,22 @@ Item {
 
             transform: Rotation {
                 property var _angle: isNoseUpLocked()?_headingToNextWP-_heading:_headingToNextWP
+                origin.x:       cOGPointer.width  / 2
+                origin.y:       cOGPointer.height / 2
+                angle:         _angle
+            }
+        }
+
+        Image {
+            id:                 windDirectionPointer
+            source:             isWindDirectionOK() ? "/qmlimages/cOGPointer.svg" : ""
+            mipmap:             true
+            fillMode:           Image.PreserveAspectFit
+            anchors.fill:       parent
+            sourceSize.height:  parent.height
+
+            transform: Rotation {
+                property var _angle: isNoseUpLocked()?_windDirection-_heading:_windDirection
                 origin.x:       cOGPointer.width  / 2
                 origin.y:       cOGPointer.height / 2
                 angle:         _angle
