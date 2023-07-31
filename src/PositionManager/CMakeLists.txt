@@ -1,7 +1,6 @@
 
 add_library(PositionManager
 	PositionManager.cpp
-	SimulatedPosition.cc
 )
 
 target_link_libraries(PositionManager

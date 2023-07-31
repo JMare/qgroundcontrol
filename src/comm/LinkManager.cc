@@ -518,7 +518,7 @@ void LinkManager::_updateAutoConnectLinks(void)
             qCDebug(LinkManagerLog) << "Changing port for UDP NMEA stream";
             _nmeaSocket.close();
             _nmeaSocket.bind(QHostAddress::AnyIPv4, _autoConnectSettings->nmeaUdpPort()->rawValue().toUInt());
-            _toolbox->qgcPositionManager()->setNmeaSourceDevice(&_nmeaSocket);
+            //_toolbox->qgcPositionManager()->setNmeaSourceDevice(&_nmeaSocket);
         }
         //close serial port
         if (_nmeaPort) {

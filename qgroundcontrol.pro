@@ -431,6 +431,7 @@ contains (DEFINES, QGC_ENABLE_PAIRING) {
 #
 
 HEADERS += \
+    src/PositionManager/positionnmeagps.h \
     src/QmlControls/CustomAction.h \
     src/QmlControls/CustomActionManager.h \
     src/QmlControls/QmlUnitsConversion.h \
@@ -447,6 +448,7 @@ contains (DEFINES, QGC_ENABLE_PAIRING) {
 }
 
 SOURCES += \
+    src/PositionManager/positionnmeagps.cpp \
     src/QmlControls/CustomActionManager.cc \
     src/Vehicle/VehicleEscStatusFactGroup.cc \
     src/api/QGCCorePlugin.cc \
@@ -639,7 +641,6 @@ HEADERS += \
     src/MissionManager/VisualMissionItem.h \
     src/MissionManager/VTOLLandingComplexItem.h \
     src/PositionManager/PositionManager.h \
-    src/PositionManager/SimulatedPosition.h \
     src/Geo/QGCGeo.h \
     src/Geo/Constants.hpp \
     src/Geo/Math.hpp \
@@ -900,7 +901,6 @@ SOURCES += \
     src/MissionManager/VisualMissionItem.cc \
     src/MissionManager/VTOLLandingComplexItem.cc \
     src/PositionManager/PositionManager.cpp \
-    src/PositionManager/SimulatedPosition.cc \
     src/Geo/QGCGeo.cc \
     src/Geo/Math.cpp \
     src/Geo/Utility.cpp \

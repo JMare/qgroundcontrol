@@ -11,11 +11,11 @@
 
 #include <QGeoPositionInfoSource>
 #include <QNmeaPositionInfoSource>
-
+#include <QSerialPort>
 #include <QVariant>
 
 #include "QGCToolbox.h"
-#include "SimulatedPosition.h"
+#include "positionnmeagps.h"
 
 class QGCPositionManager : public QGCTool {
     Q_OBJECT
@@ -30,20 +30,12 @@ public:
     Q_PROPERTY(qreal          gcsPositionHorizontalAccuracy  READ gcsPositionHorizontalAccuracy
                                                              NOTIFY gcsPositionHorizontalAccuracyChanged)
 
-    enum QGCPositionSource {
-        Simulated,
-        InternalGPS,
-        Log,
-        NmeaGPS
-    };
-
     QGeoCoordinate      gcsPosition         (void) { return _gcsPosition; }
     qreal               gcsHeading          (void) const{ return _gcsHeading; }
     qreal               gcsPositionHorizontalAccuracy(void) const { return _gcsPositionHorizontalAccuracy; }
     QGeoPositionInfo    geoPositionInfo     (void) const { return _geoPositionInfo; }
-    void                setPositionSource   (QGCPositionSource source);
     int                 updateInterval      (void) const;
-    void                setNmeaSourceDevice (QIODevice* device);
+    void setNmeaSourceDevice(QSerialPort* device);
 
     // Overrides from QGCTool
     void setToolbox(QGCToolbox* toolbox) override;
@@ -66,9 +58,5 @@ private:
     qreal               _gcsHeading =       qQNaN();
     qreal               _gcsPositionHorizontalAccuracy = std::numeric_limits<qreal>::infinity();
 
-    QGeoPositionInfoSource*     _currentSource =        nullptr;
-    QGeoPositionInfoSource*     _defaultSource =        nullptr;
-    QNmeaPositionInfoSource*    _nmeaSource =           nullptr;
-    QGeoPositionInfoSource*     _simulatedSource =      nullptr;
-    bool                        _usingPluginSource =    false;
+    PositionNMEAGPS* _nmeaGPS = nullptr;
 };
