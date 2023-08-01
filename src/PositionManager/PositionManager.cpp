@@ -21,6 +21,8 @@ QGCPositionManager::QGCPositionManager(QGCApplication* app, QGCToolbox* toolbox)
     : QGCTool           (app, toolbox)
 {
     _nmeaGPS = new PositionNMEAGPS(this);
+
+    connect(_nmeaGPS,&PositionNMEAGPS::newPositionUpdate,this,&QGCPositionManager::_positionUpdated);
 }
 
 QGCPositionManager::~QGCPositionManager()
@@ -40,9 +42,32 @@ void QGCPositionManager::setNmeaSourceDevice(QSerialPort* device)
    _nmeaGPS->setSourcePort(device);
 }
 
-void QGCPositionManager::_positionUpdated(const QGeoPositionInfo &update)
+void QGCPositionManager::_positionUpdated(QGeoPositionInfo update)
 {
+   _geoPositionInfo = update;
 
+   QGeoCoordinate newGCSPosition = QGeoCoordinate();
+   qreal newGCSHeading = update.attribute(QGeoPositionInfo::Direction);
+
+   if (update.isValid() && update.hasAttribute(QGeoPositionInfo::HorizontalAccuracy)) {
+       // Note that gcsPosition filters out possible crap values
+       if (qAbs(update.coordinate().latitude()) > 0.001 &&
+           qAbs(update.coordinate().longitude()) > 0.001 ) {
+           _gcsPositionHorizontalAccuracy = update.attribute(QGeoPositionInfo::HorizontalAccuracy);
+           if (_gcsPositionHorizontalAccuracy <= MinHorizonalAccuracyMeters) {
+               newGCSPosition = update.coordinate();
+           }
+           emit gcsPositionHorizontalAccuracyChanged();
+       }
+   }
+   if (newGCSPosition != _gcsPosition) {
+       _gcsPosition = newGCSPosition;
+       emit gcsPositionChanged(_gcsPosition);
+   }
+   _gcsHeading = newGCSHeading;
+   emit gcsHeadingChanged(_gcsHeading);
+
+   emit positionInfoUpdated(update);
 }
 
 int QGCPositionManager::updateInterval() const

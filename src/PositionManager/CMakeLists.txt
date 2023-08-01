@@ -1,6 +1,7 @@
 
 add_library(PositionManager
-	PositionManager.cpp
+        PositionManager.cpp,
+        lwgps/src/lwgps/lwgps.c
 )
 
 target_link_libraries(PositionManager
@@ -10,6 +11,7 @@ target_link_libraries(PositionManager
 
 target_include_directories(PositionManager
 	PUBLIC
-		${CMAKE_CURRENT_SOURCE_DIR}
+                ${CMAKE_CURRENT_SOURCE_DIR},
+                lwgps/src/include
 	)
 

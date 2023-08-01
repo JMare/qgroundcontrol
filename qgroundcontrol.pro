@@ -1351,6 +1351,18 @@ contains (DEFINES, QGC_GST_MICROHARD_DISABLED) {
             src/Microhard/MicrohardSettings.cc \
     }
 }
+#-------------------------------------------------------------------------------------
+# lwgps
+
+INCLUDEPATH += \
+    src/PositionManager/lwgps/src/include
+
+HEADERS += \
+    src/PositionManager/lwgps/src/include/lwgps/lwgps.h \
+
+SOURCES += \
+    src/PositionManager/lwgps/src/lwgps/lwgps.c
+
 
 #-------------------------------------------------------------------------------------
 # Video Streaming

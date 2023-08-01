@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QThread>
 #include <QSerialPort>
+#include <QGeoPositionInfoSource>
 
 class PositionNMEAGPS : public QThread
 {
@@ -13,7 +14,7 @@ public:
     void setSourcePort(QSerialPort* device);
 
 signals:
-
+    void newPositionUpdate(QGeoPositionInfo update);
 private:
     // Override from QThread
     virtual void run();

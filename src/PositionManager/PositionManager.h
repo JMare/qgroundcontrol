@@ -42,7 +42,7 @@ public:
 
 
 private slots:
-    void _positionUpdated(const QGeoPositionInfo &update);
+    void _positionUpdated(QGeoPositionInfo);
     void _error(QGeoPositionInfoSource::Error positioningError);
 
 signals:
