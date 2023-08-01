@@ -25,21 +25,21 @@ void PositionNMEAGPS::run()
 {
     while (!_exitThread) {
         QGC::SLEEP::msleep(50);
-        if(_port->bytesAvailable())
-        {
-            QByteArray data = _port->readLine();
-            //    requestData += _port->readAll();
-            QString myString(data);
+        if (_port && _port->isOpen()) {
+            qint64 byteCount = _port->bytesAvailable();
+            if (byteCount) {
+                QByteArray buffer;
+                buffer.resize(byteCount);
+                _port->read(buffer.data(), buffer.size());
+                QString myString(buffer);
 
-            uint8_t simpledata[data.length()];
-            for(int i = 0; i < data.length(); i++)
-            {
-                simpledata[i] = data[i];
+                lwgps_process(&hgps,buffer.data(), buffer.size());
+                qWarning() << myString;
+
             }
-            if(myString.length() > 0)
-            {
-                lwgps_process(&hgps,&simpledata, data.length());
-            }
+        } else {
+            // Error occurred
+            qWarning() << "Serial port not readable";
         }
 
        QGeoCoordinate coord(hgps.latitude,hgps.longitude,hgps.altitude);
