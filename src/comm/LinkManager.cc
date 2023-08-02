@@ -93,9 +93,42 @@ void LinkManager::setToolbox(QGCToolbox *toolbox)
     _autoConnectSettings = toolbox->settingsManager()->autoConnectSettings();
     _mavlinkProtocol = _toolbox->mavlinkProtocol();
 
-    connect(&_portListTimer, &QTimer::timeout, this, &LinkManager::_updateAutoConnectLinks);
-    _portListTimer.start(_autoconnectUpdateTimerMSecs); // timeout must be long enough to get past bootloader on second pass
+    //_updateAutoConnectLinks();
+    //connect(&_portListTimer, &QTimer::timeout, this, &LinkManager::_updateAutoConnectLinks);
+    //_portListTimer.start(_autoconnectUpdateTimerMSecs); // timeout must be long enough to get past bootloader on second pass
 
+    QList<QSerialPortInfo> portList = QSerialPortInfo::availablePorts();
+    qCDebug(LinkManagerVerboseLog) << " Finding serial ports";
+    for (const QSerialPortInfo &info: portList)
+    {
+        qCDebug(LinkManagerVerboseLog) << info.portName();
+        QString port = info.systemLocation().trimmed();
+        if (info.systemLocation().trimmed() == _autoConnectSettings->autoConnectNmeaPort()->cookedValueString()) {
+            qWarning() << "NMEA Port Name" << info.systemLocation().trimmed();
+            if (info.systemLocation().trimmed() != _nmeaDeviceName) {
+                _nmeaDeviceName = info.systemLocation().trimmed();
+                qCDebug(LinkManagerLog) << "Configuring nmea port" << _nmeaDeviceName;
+                QSerialPort* newPort = new QSerialPort(info);
+                _nmeaBaud = _autoConnectSettings->autoConnectNmeaBaud()->cookedValue().toUInt();
+                newPort->setBaudRate(static_cast<qint32>(_nmeaBaud));
+                qCDebug(LinkManagerLog) << "Configuring nmea baudrate" << _nmeaBaud;
+                // This will stop polling old device if previously set
+                _toolbox->qgcPositionManager()->setNmeaSourceDevice(newPort);
+                if (_nmeaPort) {
+                    delete _nmeaPort;
+                }
+                _nmeaPort = newPort;
+            } else if (_autoConnectSettings->autoConnectNmeaBaud()->cookedValue().toUInt() != _nmeaBaud) {
+                _nmeaBaud = _autoConnectSettings->autoConnectNmeaBaud()->cookedValue().toUInt();
+                _nmeaPort->setBaudRate(static_cast<qint32>(_nmeaBaud));
+                qCDebug(LinkManagerLog) << "Configuring nmea baudrate" << _nmeaBaud;
+            }
+        }
+    }
+    qDebug(LinkManagerVerboseLog) << portList.length() << "Serial port found";
+
+
+    QString nmeaportname("\\\\..\\COM5");
 }
 
 // This should only be used by Qml code
@@ -521,17 +554,18 @@ void LinkManager::_updateAutoConnectLinks(void)
             //_toolbox->qgcPositionManager()->setNmeaSourceDevice(&_nmeaSocket);
         }
         //close serial port
-        if (_nmeaPort) {
-            _nmeaPort->close();
-            delete _nmeaPort;
-            _nmeaPort = nullptr;
-            _nmeaDeviceName = "";
-        }
+        //if (_nmeaPort) {
+        //    _nmeaPort->close();
+        //    delete _nmeaPort;
+        //    _nmeaPort = nullptr;
+        //    _nmeaDeviceName = "";
+        //}
     } else {
         _nmeaSocket.close();
     }
 #endif
 #endif
+    QGC::SLEEP::msleep(500);
 
 #ifndef NO_SERIAL_LINK
     QStringList                 currentPorts;
@@ -547,9 +581,15 @@ void LinkManager::_updateAutoConnectLinks(void)
         qDebug() << "Skipping serial port list";
     }
 #else
-    portList = QGCSerialPortInfo::availablePorts();
+    //portList = QGCSerialPortInfo::availablePorts();
 #endif
+    //this->_updateSerialPorts();
+    portList = QGCSerialPortInfo::availablePorts();
 
+    qDebug() << portList.length() << "Serial port found";
+
+
+    //portList = this->serialPorts();
     // Iterate Comm Ports
     for (const QGCSerialPortInfo& portInfo: portList) {
         qCDebug(LinkManagerVerboseLog) << "-----------------------------------------------------";
@@ -571,6 +611,7 @@ void LinkManager::_updateAutoConnectLinks(void)
 #ifndef __mobile__
         // check to see if nmea gps is configured for current Serial port, if so, set it up to connect
         if (portInfo.systemLocation().trimmed() == _autoConnectSettings->autoConnectNmeaPort()->cookedValueString()) {
+            qWarning() << "NMEA Port Name" << portInfo.systemLocation().trimmed();
             if (portInfo.systemLocation().trimmed() != _nmeaDeviceName) {
                 _nmeaDeviceName = portInfo.systemLocation().trimmed();
                 qCDebug(LinkManagerLog) << "Configuring nmea port" << _nmeaDeviceName;
@@ -714,8 +755,10 @@ void LinkManager::_updateSerialPorts()
     _commPortDisplayList.clear();
 #ifndef NO_SERIAL_LINK
     QList<QSerialPortInfo> portList = QSerialPortInfo::availablePorts();
+    qCDebug(LinkManagerVerboseLog) << " Finding serial ports";
     for (const QSerialPortInfo &info: portList)
     {
+        qCDebug(LinkManagerVerboseLog) << info.portName();
         QString port = info.systemLocation().trimmed();
         _commPortList += port;
         _commPortDisplayList += SerialConfiguration::cleanPortDisplayname(port);

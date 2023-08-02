@@ -16,6 +16,14 @@ PositionNMEAGPS::PositionNMEAGPS(QObject *parent)
 void PositionNMEAGPS::setSourcePort(QSerialPort* device)
 {
     _port = device;
+    _port->setBaudRate(QSerialPort::Baud9600);
+    _port->setParity(QSerialPort::NoParity);
+    _port->setFlowControl(QSerialPort::NoFlowControl);
+    _port->setStopBits(QSerialPort::OneStop);
+
+    qWarning() << "Serial port " << _port->portName();
+
+
     _port->open(QIODevice::ReadOnly);
     lwgps_init(&hgps);
     start();
@@ -24,7 +32,7 @@ void PositionNMEAGPS::setSourcePort(QSerialPort* device)
 void PositionNMEAGPS::run()
 {
     while (!_exitThread) {
-        QGC::SLEEP::msleep(50);
+        QGC::SLEEP::msleep(100);
         if (_port && _port->isOpen()) {
             qint64 byteCount = _port->bytesAvailable();
             if (byteCount) {
