@@ -692,6 +692,7 @@ void Joystick::_handleAxis()
 
 void Joystick::startPolling(Vehicle* vehicle)
 {
+    qWarning() << "Start Polling vehicle " << vehicle->id();
     if (vehicle) {
         // If a vehicle is connected, disconnect it
         if (_activeVehicle) {
