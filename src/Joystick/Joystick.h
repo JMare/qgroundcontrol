@@ -365,4 +365,6 @@ private:
 
 private slots:
     void _activeVehicleChanged(Vehicle* activeVehicle);
+    void _vehicleCountChanged(int count);
+
 };
