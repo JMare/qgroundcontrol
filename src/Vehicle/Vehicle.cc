@@ -2087,12 +2087,12 @@ void Vehicle::_loadJoystickSettings()
     settings.beginGroup(QString(_settingsGroup).arg(_id));
 
     if (_toolbox->joystickManager()->activeJoystick()) {
-        qWarning() << "Vehicle " << this->id() << ": Notified of an active joystick. Loading setting joystickenabled: " << settings.value(_joystickEnabledSettingsKey, false).toBool();
+        qCDebug(VehicleLog) << "Vehicle " << this->id() << " Notified of an active joystick. Loading setting joystickenabled: " << settings.value(_joystickEnabledSettingsKey, false).toBool();
         setJoystickEnabled(settings.value(_joystickEnabledSettingsKey, false).toBool());
     }
     else
     {
-        qWarning() << "Vehicle " << this->id() << ": Notified that there is no active joystick";
+        qCDebug(VehicleLog) << "Vehicle " << this->id() << " Notified that there is no active joystick";
         setJoystickEnabled(false);
     }
 }
@@ -2107,7 +2107,7 @@ void Vehicle::saveJoystickSettings()
     // The joystick enabled setting should only be changed if a joystick is present
     // since the checkbox can only be clicked if one is present
     if (_toolbox->joystickManager()->joysticks().count()) {
-        qWarning() << "Vehicle " << this->id() << ": Saving setting joystickenabled: " << _joystickEnabled;
+        qCDebug(VehicleLog) << "Vehicle " << this->id() << " Saving setting joystickenabled: " << _joystickEnabled;
         settings.setValue(_joystickEnabledSettingsKey, _joystickEnabled);
     }
 }
@@ -2119,10 +2119,12 @@ bool Vehicle::joystickEnabled() const
 
 void Vehicle::setJoystickEnabled(bool enabled)
 {
-    if(enabled)
-        qWarning() << "Vehicle " << this->id() << ": Joystick Enabled";
-    else
-        qWarning() << "Vehicle " << this->id() << ": Joystick Disabled";
+    if (enabled){
+        qCDebug(VehicleLog) << "Vehicle " << this->id() << " Joystick Enabled";
+    }
+    else {
+        qCDebug(VehicleLog) << "Vehicle " << this->id() << " Joystick Disabled";
+    }
 
     // _joystickEnabled is the runtime state - it determines whether a vehicle is using joystick data when it is active
     _joystickEnabled = enabled;
@@ -2142,7 +2144,7 @@ void Vehicle::_activeVehicleChanged(Vehicle *newActiveVehicle)
     // even if the new active vehicle has joystick disabled
     // capturing the joystick will stop the joystick data going to the inactive vehicle
     if (newActiveVehicle == this){
-        qWarning() << "Vehicle " << this->id() << ": is the new active vehicle";
+        qCDebug(VehicleLog) << "Vehicle " << this->id() << " is the new active vehicle";
         _captureJoystick();
     }
 }
@@ -2152,9 +2154,8 @@ void Vehicle::_captureJoystick()
 {
     Joystick* joystick = _joystickManager->activeJoystick();
 
-    if(joystick)
-    {
-        qWarning() << "Vehicle " << this->id() << ": Capture Joystick";
+    if(joystick){
+        qCDebug(VehicleLog) << "Vehicle " << this->id() << " Capture Joystick";
         joystick->startPolling(this);
     }
 }
