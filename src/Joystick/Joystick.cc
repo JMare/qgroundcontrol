@@ -732,6 +732,7 @@ void Joystick::startPolling(Vehicle* vehicle)
     }
     if (!isRunning()) {
         _exitThread = false;
+        qWarning() << "Joystick: Starting Thread";
         start();
     }
 }
@@ -750,6 +751,8 @@ void Joystick::stopPolling(void)
             disconnect(this, &Joystick::gripperAction,      _activeVehicle, &Vehicle::setGripperAction);
         }
         _exitThread = true;
+        qWarning() << "Joystick: Stopping Thread";
+
     }
 }
 

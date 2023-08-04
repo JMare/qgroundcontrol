@@ -180,7 +180,6 @@ Vehicle::Vehicle(LinkInterface*             link,
     _linkManager = _toolbox->linkManager();
 
     connect(_joystickManager, &JoystickManager::activeJoystickChanged, this, &Vehicle::_loadSettings);
-    //unsafe //connect(qgcApp()->toolbox()->multiVehicleManager(), &MultiVehicleManager::activeVehicleAvailableChanged, this, &Vehicle::_activeVehicleAvailableChanged);
     connect(qgcApp()->toolbox()->multiVehicleManager(), &MultiVehicleManager::activeVehicleChanged, this, &Vehicle::_activeVehicleChanged);
 
     _mavlink = _toolbox->mavlinkProtocol();
@@ -475,6 +474,9 @@ void Vehicle::_commonInit()
         _settingsManager->videoSettings()->videoSource()->setRawValue(VideoSettings::videoSourceUDPH264);
         _settingsManager->videoSettings()->lowLatencyMode()->setRawValue(true);
     }
+
+    // enable Joystick if appropriate
+    _loadSettings();
 }
 
 Vehicle::~Vehicle()
@@ -489,10 +491,6 @@ Vehicle::~Vehicle()
 
     delete _mav;
     _mav = nullptr;
-
-    if (_joystickManager) {
-        _startJoystick(false);
-    }
 }
 
 void Vehicle::prepareDelete()
@@ -2081,52 +2079,25 @@ void Vehicle::resetErrorLevelMessages()
 
 void Vehicle::_loadSettings()
 {
-    qWarning() << "Load settings vehicle " << this->id();
-
     QSettings settings;
     settings.beginGroup(QString(_settingsGroup).arg(_id));
     // Joystick enabled is a global setting so first make sure there are any joysticks connected
     if (_toolbox->joystickManager()->joysticks().count()) {
+        qWarning() << "Load Settings, there are now: " << _toolbox->joystickManager()->joysticks().count() << " joysticks";
+        qWarning() << "Vehicle " << this->id() << " Loaded setting joystickenabled: " << settings.value(_joystickEnabledSettingsKey, false).toBool();
         setJoystickEnabled(settings.value(_joystickEnabledSettingsKey, false).toBool());
-        _startJoystick(true);
-    }
-}
-
-void Vehicle::_activeVehicleAvailableChanged(bool isActiveVehicleAvailable)
-{
-    // if there is no longer an active vehicle, disconnect the joystick
-    if(!isActiveVehicleAvailable) {
-        qWarning() << "Active vehicle no longer avail " << this->id();
-        setJoystickEnabled(false);
-    }
-}
-
-void Vehicle::_activeVehicleChanged(Vehicle *newActiveVehicle)
-{
-    if(newActiveVehicle == this) {
-        QSettings settings;
-        settings.beginGroup(QString(_settingsGroup).arg(_id));
-        // Joystick enabled is a global setting so first make sure there are any joysticks connected
-        if (_toolbox->joystickManager()->joysticks().count()) {
-            qWarning() << "active vehicle changed -> new vehice " << this->id();
-            setJoystickEnabled(settings.value(_joystickEnabledSettingsKey, false).toBool());
-            //_startJoystick(true);
-        }
-        // this vehicle is the newly active vehicle
-        //setJoystickEnabled(true);
     }
 }
 
 void Vehicle::_saveSettings()
 {
-    qWarning() << "save settings vehicle " << this->id();
-
     QSettings settings;
     settings.beginGroup(QString(_settingsGroup).arg(_id));
 
     // The joystick enabled setting should only be changed if a joystick is present
     // since the checkbox can only be clicked if one is present
     if (_toolbox->joystickManager()->joysticks().count()) {
+        qWarning() << "Vehicle " << this->id() << " saving setting joystickenabled: " << _joystickEnabled;
         settings.setValue(_joystickEnabledSettingsKey, _joystickEnabled);
     }
 }
@@ -2139,33 +2110,41 @@ bool Vehicle::joystickEnabled() const
 void Vehicle::setJoystickEnabled(bool enabled)
 {
     if(enabled)
-        qWarning() << "setjoystickenabled " << this->id();
+        qWarning() << "Vehicle " << this->id() << " Joystick Enabled";
     else
-        qWarning() << "setjoystickdisabled " << this->id();
+        qWarning() << "Vehicle " << this->id() << " Joystick Disabled";
 
     _joystickEnabled = enabled;
-    _startJoystick(_joystickEnabled);
     _saveSettings();
+
+    // if we are the active vehicle, call start polling on the active joystick
+    // This routes the joystick signals to this vehicle
+    if (enabled && _toolbox->multiVehicleManager()->activeVehicle() == this){
+        _captureJoystick();
+    }
+
     emit joystickEnabledChanged(_joystickEnabled);
 }
 
-void Vehicle::_startJoystick(bool start)
+void Vehicle::_activeVehicleChanged(Vehicle *newActiveVehicle)
 {
-    if(start)
-        qWarning() << "start joystick vehicle " << this->id();
-    else
-        qWarning() << "stop joystick vehicle  " << this->id();
-
-    Joystick* joystick = _joystickManager->activeJoystick();
-    if (joystick) {
-        if (start) {
-            joystick->startPolling(this);
-        } else {
-            joystick->stopPolling();
-            joystick->wait(500);
-        }
+    if (_joystickEnabled && newActiveVehicle == this){
+        qWarning() << "Vehicle " << this->id() << " is new active vehicle";
+        _captureJoystick();
     }
 }
+
+void Vehicle::_captureJoystick()
+{
+    Joystick* joystick = _joystickManager->activeJoystick();
+
+    if(joystick)
+    {
+        qWarning() << "Vehicle " << this->id() << " Capture Joystick";
+        joystick->startPolling(this);
+    }
+}
+
 
 QGeoCoordinate Vehicle::homePosition()
 {

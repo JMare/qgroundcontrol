@@ -1032,10 +1032,9 @@ private slots:
 
 private:
     void _loadSettings                  ();
-    void _activeVehicleAvailableChanged (bool isActiveVehicleAvailable);
     void _activeVehicleChanged          (Vehicle* newActiveVehicle);
     void _saveSettings                  ();
-    void _startJoystick                 (bool start);
+    void _captureJoystick               ();
     void _handlePing                    (LinkInterface* link, mavlink_message_t& message);
     void _handleHomePosition            (mavlink_message_t& message);
     void _handleHeartbeat               (mavlink_message_t& message);
