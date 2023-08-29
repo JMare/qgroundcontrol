@@ -114,6 +114,7 @@ private:
 
     bool        _emergencyDeclared;
     QDateTime   _lastGeoPositionTimeStamp;
+    QDateTime   _lastGeoPositionSystemTimeStamp;
     int         _targetSystem;
     int         _targetComponent;
 

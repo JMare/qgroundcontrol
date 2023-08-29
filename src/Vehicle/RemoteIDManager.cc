@@ -301,8 +301,10 @@ void RemoteIDManager::_sendSystem()
                 return;
             }
 
-            // If the GPS data is older than ALLOWED_GPS_DELAY we cannot use this data 
-            if (_lastGeoPositionTimeStamp.msecsTo(QDateTime::currentDateTime().currentDateTimeUtc()) > ALLOWED_GPS_DELAY) {
+            // If the GPS data is older than ALLOWED_GPS_DELAY we cannot use this data
+            // We check this by looking at elapsed time since the packet was received, not the actual timestamp field of the message
+            // this removes reliance on the system clock to be accurate
+            if (_lastGeoPositionSystemTimeStamp.msecsTo(QDateTime::currentDateTime().currentDateTimeUtc()) > ALLOWED_GPS_DELAY) {
                 if (_gcsGPSGood) {
                     _gcsGPSGood = false;
                     emit gcsGPSGoodChanged();
@@ -356,7 +358,22 @@ uint32_t RemoteIDManager::_timestamp2019()
 {
     uint32_t secsSinceEpoch2019 = 1546300800; // Secs elapsed since epoch to 1-1-2019
 
-    return ((QDateTime::currentDateTime().currentSecsSinceEpoch()) - secsSinceEpoch2019);
+    // if our source is takeoff or fixed, we have no choice but to use the system clock
+    QDateTime timetouse = QDateTime::currentDateTimeUtc();
+
+    // however, if we are using Live GNSS, and we have a recent valid location update
+    // we can construct a more accurate timestamp that doesnt rely on system clock absolute accuracy
+    // we do this by adding the elapsed time since Last NMEA packet was received with the UTC timestamp from that packet
+    if (_settings->locationType()->rawValue().toUInt() == LocationTypes::LiveGNSS)
+    {
+        uint32_t msecs_since_update = _lastGeoPositionSystemTimeStamp.msecsTo(QDateTime::currentDateTime().currentDateTimeUtc());
+        if(msecs_since_update < ALLOWED_GPS_DELAY)
+        {
+            // then our gps update is good enough to use as a time reference
+            timetouse = _lastGeoPositionTimeStamp.addMSecs(msecs_since_update);
+        }
+    }
+    return ((timetouse.currentSecsSinceEpoch()) - secsSinceEpoch2019);
 }
 
 void RemoteIDManager::_sendBasicID()
@@ -426,5 +443,6 @@ void RemoteIDManager::_updateLastGCSPositionInfo(QGeoPositionInfo update)
 {
     if (update.isValid()) {
         _lastGeoPositionTimeStamp = update.timestamp().toUTC();
+        _lastGeoPositionSystemTimeStamp = QDateTime::currentDateTimeUtc();
     }
 }
