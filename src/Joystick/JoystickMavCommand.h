@@ -27,6 +27,8 @@ public:
     void send(Vehicle* vehicle);
 private:
     QString _name;
+    int _targetcomponentid = 0; // optional in JSON, useful for targeting companion computer, gimbal etc.
+    int _specifiedtargetcomponent = false; // true if the the target component id is defined in the JSON
     int _id = 0;
     bool _showError = false;
     float _param1 = 0.0f;

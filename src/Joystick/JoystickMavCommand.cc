@@ -75,6 +75,16 @@ QList<JoystickMavCommand> JoystickMavCommand::load(const QString& jsonFilename)
             continue;
         }
         item._name = jsonObject.value("name").toString();
+
+        // target comp id is optional, if not set, will use default component id
+        if (!jsonObject.contains("targetcomponentid")) {
+            item._specifiedtargetcomponent = false;
+        }
+        else
+        {
+            item._specifiedtargetcomponent = true;
+            item._targetcomponentid = jsonObject.value("targetcomponentid").toInt();
+        }
         item._showError = jsonObject.value("showError").toBool();
         parseJsonValue(jsonObject, "param1", item._param1);
         parseJsonValue(jsonObject, "param2", item._param2);
@@ -94,7 +104,13 @@ QList<JoystickMavCommand> JoystickMavCommand::load(const QString& jsonFilename)
 
 void JoystickMavCommand::send(Vehicle* vehicle)
 {
-    vehicle->sendMavCommand(vehicle->defaultComponentId(),
+    uint8_t target_component = vehicle->defaultComponentId();
+    if(_specifiedtargetcomponent)
+    {
+        target_component = _targetcomponentid;
+    }
+
+    vehicle->sendMavCommand(target_component,
                             static_cast<MAV_CMD>(_id),
                             _showError,
                             _param1, _param2, _param3, _param4, _param5, _param6, _param7);
