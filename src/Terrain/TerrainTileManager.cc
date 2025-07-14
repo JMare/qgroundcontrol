@@ -319,3 +319,24 @@ TerrainTile *TerrainTileManager::_getCachedTile(const QString &hash)
 
     return tile;
 }
+
+QList<TerrainTile*> TerrainTileManager::findTilesForBounds(double minLat, double maxLat, double minLon, double maxLon) const
+{
+    QMutexLocker locker(&_tilesMutex);
+    QList<TerrainTile*> result;
+
+    for (auto* tile : _tiles) {
+        if (!tile || !tile->isValid())
+            continue;
+
+        // Check if tile bounds overlap requested bounds
+        if (tile->_tileInfo.neLat < minLat || tile->_tileInfo.swLat > maxLat)
+            continue;
+        if (tile->_tileInfo.neLon < minLon || tile->_tileInfo.swLon > maxLon)
+            continue;
+
+        result.append(tile);
+    }
+
+    return result;
+}

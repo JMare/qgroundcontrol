@@ -12,6 +12,10 @@ target_sources(${CMAKE_PROJECT_NAME}
         TerrainTile.h
         TerrainTileManager.cc
         TerrainTileManager.h
+        TerrainOverlayGridManager.cc
+        TerrainOverlayGridManager.h
+        TileOverlayEntry.h
+        TileOverlayModel.h
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME}

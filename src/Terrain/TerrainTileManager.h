@@ -39,6 +39,8 @@ public:
     ///     @return true: altitude returned (check error as well), false: database query queued (altitudes not returned)
     bool getAltitudesForCoordinates(const QList<QGeoCoordinate> &coordinates, QList<double> &altitudes, bool &error);
 
+    QList<TerrainTile*> findTilesForBounds(double minLat, double maxLat, double minLon, double maxLon) const;
+
     void addCoordinateQuery(TerrainQueryInterface *terrainQueryInterface, const QList<QGeoCoordinate> &coordinates);
     void addPathQuery(TerrainQueryInterface *terrainQueryInterface, const QGeoCoordinate &startPoint, const QGeoCoordinate &endPoint);
 
@@ -63,7 +65,7 @@ private:
     QQueue<QueuedRequestInfo_t> _requestQueue;
     TerrainQuery::State _state = TerrainQuery::State::Idle;
 
-    QMutex _tilesMutex;
+    mutable QMutex _tilesMutex;
     QHash<QString, TerrainTile*> _tiles;
 
     QNetworkAccessManager *_networkManager = nullptr;

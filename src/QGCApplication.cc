@@ -69,6 +69,7 @@
 #include "Vehicle.h"
 #include "VehicleComponent.h"
 #include "VideoManager.h"
+#include "TerrainOverlayGridManager.h"
 
 #ifndef QGC_DISABLE_MAVLINK_INSPECTOR
 #include "MAVLinkInspectorController.h"
@@ -276,6 +277,7 @@ void QGCApplication::init()
     Viewer3DManager::registerQmlTypes();
 #endif
 
+    qmlRegisterType<TerrainOverlayGridManager>("Custom.TerrainOverlay", 1, 0, "TerrainOverlayGridManager");
     qmlRegisterUncreatableType<GimbalController>("QGroundControl.Vehicle", 1, 0, "GimbalController", "Reference only");
 
 #ifndef QGC_DISABLE_MAVLINK_INSPECTOR

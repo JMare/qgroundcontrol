@@ -47,8 +47,6 @@ public:
     /// Accessor for the average elevation of the tile
     ///    @return average elevation
     double avgElevation() const { return (_isValid ? _tileInfo.avgElevation : qQNaN()); }
-
-protected:
     struct TileInfo_t {
         double  swLat, swLon, neLat, neLon;
         int16_t minElevation, maxElevation;
@@ -56,7 +54,11 @@ protected:
         int16_t gridSizeLat, gridSizeLon;
     } Q_PACKED;
 
-private:
+    const QList<QList<int16_t>>& elevationData() const { return _elevationData; }
+    double cellSizeLat() const { return _cellSizeLat; }
+    double cellSizeLon() const { return _cellSizeLon; }
+    TileInfo_t tileInfo() const { return _tileInfo; }
+
     TileInfo_t _tileInfo{};
     QList<QList<int16_t>> _elevationData;   ///< 2D elevation data array
     double _cellSizeLat = 0.0;              ///< data grid size in latitude direction

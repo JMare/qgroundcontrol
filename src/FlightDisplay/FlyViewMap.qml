@@ -22,6 +22,7 @@ import QGroundControl.FlightMap
 import QGroundControl.Palette
 import QGroundControl.ScreenTools
 import QGroundControl.Vehicle
+import Custom.TerrainOverlay 1.0
 
 FlightMap {
     id:                         _root
@@ -76,6 +77,23 @@ FlightMap {
     onZoomLevelChanged: {
         if (_saveZoomLevelSetting) {
             QGroundControl.flightMapZoom = _root.zoomLevel
+        }
+        if (_root.width > 0 && _root.height > 0) {
+            var topLeft = _root.toCoordinate(Qt.point(0, 0))
+            var bottomRight = _root.toCoordinate(Qt.point(_root.width, _root.height))
+
+            if (topLeft.isValid && bottomRight.isValid) {
+                var minLat = Math.min(topLeft.latitude, bottomRight.latitude)
+                var maxLat = Math.max(topLeft.latitude, bottomRight.latitude)
+                var minLon = Math.min(topLeft.longitude, bottomRight.longitude)
+                var maxLon = Math.max(topLeft.longitude, bottomRight.longitude)
+
+                terrainOverlay.loadTilesForViewport(minLat, maxLat, minLon, maxLon)
+            } else {
+                console.log("[Overlay] Skipped: corners invalid")
+            }
+        } else {
+            console.log("[Overlay] Skipped: map has no size")
         }
     }
     onCenterChanged: {
@@ -326,6 +344,37 @@ FlightMap {
         }
     }
 
+// --------------------
+// DEMO: Altitude-colored tile overlay
+// --------------------
+
+
+TerrainOverlayGridManager {
+    id: terrainOverlay
+}
+
+MapItemView {
+    model: terrainOverlay.model
+
+    delegate: MapPolygon {
+        border.color: "black"
+        border.width: 2
+        color: model.color
+        opacity: 0.4
+
+        path: [
+            QtPositioning.coordinate(model.lat + deltaLat, model.lon - deltaLon),
+            QtPositioning.coordinate(model.lat + deltaLat, model.lon + deltaLon),
+            QtPositioning.coordinate(model.lat - deltaLat, model.lon + deltaLon),
+            QtPositioning.coordinate(model.lat - deltaLat, model.lon - deltaLon),
+            QtPositioning.coordinate(model.lat + deltaLat, model.lon - deltaLon)
+        ]
+
+        property real meters: 50
+        property real deltaLat: meters / 111320
+        property real deltaLon: meters / (111320 * Math.cos(model.lat * Math.PI / 180))
+    }
+}
     // Allow custom builds to add map items
     CustomMapItems {
         map:            _root
@@ -655,7 +704,7 @@ FlightMap {
                     QGCButton {
                         Layout.fillWidth:   true
                         text:               qsTr("Edit Position")
-                        onClicked: {         
+                        onClicked: {
                             roiEditPositionDialogComponent.createObject(mainWindow, { showSetPositionFromVehicle: false }).open()
                             roiEditDropPanel.close()
                         }
@@ -756,7 +805,7 @@ FlightMap {
     }
 
     onMapClicked: (position) => {
-        if (!globals.guidedControllerFlyView.guidedUIVisible && 
+        if (!globals.guidedControllerFlyView.guidedUIVisible &&
             (globals.guidedControllerFlyView.showGotoLocation || globals.guidedControllerFlyView.showOrbit ||
              globals.guidedControllerFlyView.showROI || globals.guidedControllerFlyView.showSetHome ||
              globals.guidedControllerFlyView.showSetEstimatorOrigin)) {
