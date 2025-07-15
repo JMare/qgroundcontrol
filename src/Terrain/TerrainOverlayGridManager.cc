@@ -233,15 +233,15 @@ void TerrainOverlayGridManager::_updateColorsForVehiclePosition(double vehicleAl
         return;
     }
 
-    if (!_modelBuilt) {
-        return;
-    }
+    QGeoCoordinate dronePos = _activeVehicle->coordinate();
 
     for (int i = 0; i < _gridPoints.size(); ++i) {
         double groundAlt = _terrainAltitudes[i];
-        double relativeAlt = vehicleAlt - groundAlt;
-        double value = (relativeAlt + 50.0) / 100.0;
-        value = qBound(0.0, value, 1.0) * 100.0;
+        if (std::isnan(groundAlt)) continue;
+
+        bool los = _hasLineOfSight(dronePos, vehicleAlt, _gridPoints[i], groundAlt);
+
+        double value = los ? 0.0 : 100.0;
 
         _gridModel->updateCellValue(i, value);
     }
@@ -271,4 +271,59 @@ void TerrainOverlayGridManager::_stopRetryTimer()
         qCDebug(TerrainOverlayLog) << "[Overlay] Stopping retry timer.";
         _retryTimer.stop();
     }
+}
+double TerrainOverlayGridManager::_interpolatedTerrainAltitude(const QGeoCoordinate& coord) const
+{
+    // Find 4 surrounding grid points
+    // Bilinearly interpolate their altitudes
+
+    // For simplicity, you can even do nearest-neighbor for first version:
+    double bestDist = std::numeric_limits<double>::max();
+    double bestAlt = qQNaN();
+
+    for (int i = 0; i < _gridPoints.size(); ++i) {
+        double d = coord.distanceTo(_gridPoints[i]);
+        if (d < bestDist && !std::isnan(_terrainAltitudes[i])) {
+            bestDist = d;
+            bestAlt = _terrainAltitudes[i];
+        }
+    }
+
+    return bestAlt;
+}
+
+bool TerrainOverlayGridManager::_hasLineOfSight(
+    const QGeoCoordinate& dronePos,
+    double droneAlt,
+    const QGeoCoordinate& targetPos,
+    double targetGroundAlt)
+{
+    // How many steps? E.g., sample every 50m
+    constexpr double stepMeters = 50.0;
+
+    double groundDist = dronePos.distanceTo(targetPos);
+    int numSteps = int(groundDist / stepMeters);
+
+    if (numSteps < 1) return true; // Very close
+
+    // Interpolate along path
+    for (int i = 1; i < numSteps; ++i) {
+        double t = double(i) / numSteps;
+
+        double lat = dronePos.latitude() * (1 - t) + targetPos.latitude() * t;
+        double lon = dronePos.longitude() * (1 - t) + targetPos.longitude() * t;
+        QGeoCoordinate sampleCoord(lat, lon);
+
+        double terrainAlt = _interpolatedTerrainAltitude(sampleCoord);
+        if (std::isnan(terrainAlt)) continue;
+
+        double expectedAlt = droneAlt * (1 - t) + (targetGroundAlt + 10) * t;
+        // +10m buffer over ground at target to allow clearance
+
+        if (terrainAlt > expectedAlt) {
+            return false; // Blocked
+        }
+    }
+
+    return true; // Clear
 }

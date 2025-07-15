@@ -39,6 +39,14 @@ private:
     void _activeVehicleChanged(Vehicle* vehicle);
     void _vehicleCoordinateChanged(const QGeoCoordinate& newCoord);
 
+    double _interpolatedTerrainAltitude(const QGeoCoordinate& coord) const;
+    bool _hasLineOfSight();
+    bool _hasLineOfSight(
+        const QGeoCoordinate& dronePos,
+        double droneAlt,
+        const QGeoCoordinate& targetPos,
+        double targetGroundAlt);
+
     void _tryInitialGridSetup();
     void _generateGridAroundHome(const QGeoCoordinate& center);
 
