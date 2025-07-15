@@ -18,18 +18,13 @@
 #include <QtCore/QMetaObject>
 #include <QtCore/qapplicationstatic.h>
 
-TerrainOverlayGridManager* TerrainOverlayGridManager::_instance = nullptr;
-
 Q_LOGGING_CATEGORY(TerrainOverlayLog, "qgc.qgcapplication")
 
 Q_APPLICATION_STATIC(TerrainOverlayGridManager, _instance);
 
 TerrainOverlayGridManager* TerrainOverlayGridManager::instance()
 {
-    if (!_instance) {
-        _instance = new TerrainOverlayGridManager(qgcApp());
-    }
-    return _instance;
+    return _instance();
 }
 
 void TerrainOverlayGridManager::registerQmlTypes()
@@ -47,7 +42,7 @@ TerrainOverlayGridManager::TerrainOverlayGridManager(QObject* parent)
     qCDebug(TerrainOverlayLog) << "TerrainOverlayGridManager initialized";
 
     connect(&_retryTimer, &QTimer::timeout, this, &TerrainOverlayGridManager::_requestTerrainAltitudes);
-    _retryTimer.setInterval(1000); // Retry every 3 seconds
+    _retryTimer.setInterval(1000);
 
     _connectActiveVehicle();
 
@@ -83,13 +78,14 @@ void TerrainOverlayGridManager::_activeVehicleChanged(Vehicle* vehicle)
         connect(_activeVehicle, &Vehicle::coordinateChanged,
                 this, &TerrainOverlayGridManager::_vehicleCoordinateChanged,
                 Qt::UniqueConnection);
-
         _vehicleCoordinateChanged(_activeVehicle->coordinate());
     } else {
         qCDebug(TerrainOverlayLog) << "[Overlay] No active vehicle. Clearing grid.";
         _gridModel.clear();
         _gridPoints.clear();
         _terrainAltitudes.clear();
+        _modelBuilt = false;
+
         _stopRetryTimer();
         emit modelChanged();
     }
@@ -101,9 +97,7 @@ void TerrainOverlayGridManager::_vehicleCoordinateChanged(const QGeoCoordinate& 
         return;
     }
 
-
     double vehicleAlt = _activeVehicle->coordinate().altitude();
-
     if (std::isnan(vehicleAlt)) {
         vehicleAlt = 0;
     }
@@ -113,7 +107,7 @@ void TerrainOverlayGridManager::_vehicleCoordinateChanged(const QGeoCoordinate& 
     if (_gridPoints.isEmpty()) {
         _homeCoord = newCoord;
         _tryInitialGridSetup();
-    } else {
+    } else if (_modelBuilt) {
         _updateColorsForVehiclePosition(vehicleAlt);
     }
 }
@@ -136,9 +130,10 @@ void TerrainOverlayGridManager::_generateGridAroundHome(const QGeoCoordinate& ce
 {
     _gridPoints.clear();
     _terrainAltitudes.clear();
+    _modelBuilt = false;
 
-    constexpr double spacingMeters = 50.0;
-    constexpr double halfWidthMeters = 1000.0; // 4km x 4km grid
+    constexpr double spacingMeters = 100.0;
+    constexpr double halfWidthMeters = 1000.0; // 2km x 2km grid
 
     double approxLatSpacing = spacingMeters / 111320.0;
     double approxLatHalf = halfWidthMeters / 111320.0;
@@ -179,35 +174,36 @@ void TerrainOverlayGridManager::_requestTerrainAltitudes()
     }
 
     int numCells = qMin(_gridPoints.count(), newAltitudes.count());
+    bool updated = false;
     for (int i = 0; i < numCells; ++i) {
-        if (!std::isnan(newAltitudes[i])) {
+        if (!std::isnan(newAltitudes[i]) && std::isnan(_terrainAltitudes[i])) {
             _terrainAltitudes[i] = newAltitudes[i];
+            updated = true;
         }
     }
 
-    _updateColorsForVehiclePosition(_lastVehicleAltitude);
-
     if (_hasAllTerrainData()) {
-        qCDebug(TerrainOverlayLog) << "[Overlay] All terrain data received. Stopping retry.";
+        qCDebug(TerrainOverlayLog) << "[Overlay] All terrain data received. Building model.";
         _stopRetryTimer();
-    } else {
-        qCDebug(TerrainOverlayLog) << "[Overlay] Still missing terrain tiles. Retrying.";
+        _buildInitialModel();
+    } else if (updated) {
+        _updateColorsForVehiclePosition(_lastVehicleAltitude);
     }
 }
 
-void TerrainOverlayGridManager::_updateColorsForVehiclePosition(double vehicleAlt)
+void TerrainOverlayGridManager::_buildInitialModel()
 {
     _gridModel.clear();
-
     int numCells = qMin(_gridPoints.count(), _terrainAltitudes.count());
+
     for (int i = 0; i < numCells; ++i) {
         double groundAlt = _terrainAltitudes[i];
         if (std::isnan(groundAlt)) {
             continue;
         }
 
-        double relativeAlt = vehicleAlt - groundAlt;
-        double value = (relativeAlt + 50) / 100.0;
+        double relativeAlt = _lastVehicleAltitude - groundAlt;
+        double value = (relativeAlt + 50.0) / 100.0;
         value = qBound(0.0, value, 1.0) * 100.0;
 
         QVariantMap cell;
@@ -219,8 +215,37 @@ void TerrainOverlayGridManager::_updateColorsForVehiclePosition(double vehicleAl
         _gridModel.append(cell);
     }
 
-    qCDebug(TerrainOverlayLog) << "[Overlay] Model updated with" << _gridModel.count() << "cells.";
+    _modelBuilt = true;
+    qCDebug(TerrainOverlayLog) << "[Overlay] Initial model built with" << _gridModel.count() << "cells.";
     emit modelChanged();
+}
+
+void TerrainOverlayGridManager::_updateColorsForVehiclePosition(double vehicleAlt)
+{
+    if (!_modelBuilt) {
+        return;
+    }
+
+    bool changed = false;
+    for (int i = 0; i < _gridModel.size(); ++i) {
+        QVariantMap cell = _gridModel[i].toMap();
+        double groundAlt = cell["altitude"].toDouble();
+
+        double relativeAlt = vehicleAlt - groundAlt;
+        double value = (relativeAlt + 50.0) / 100.0;
+        value = qBound(0.0, value, 1.0) * 100.0;
+
+        if (!qFuzzyCompare(cell["value"].toDouble() + 1, value + 1)) {
+            cell["value"] = value;
+            _gridModel[i] = cell;
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        qCDebug(TerrainOverlayLog) << "[Overlay] Model recolored in-place with" << _gridModel.count() << "cells.";
+        emit modelChanged();
+    }
 }
 
 bool TerrainOverlayGridManager::_hasAllTerrainData() const

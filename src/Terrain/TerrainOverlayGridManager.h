@@ -40,14 +40,14 @@ private:
 
     void _tryInitialGridSetup();
     void _generateGridAroundHome(const QGeoCoordinate& center);
+
     void _requestTerrainAltitudes();
+    void _buildInitialModel();
     void _updateColorsForVehiclePosition(double vehicleAlt);
 
     bool _hasAllTerrainData() const;
     void _startRetryTimer();
     void _stopRetryTimer();
-
-    static TerrainOverlayGridManager* _instance;
 
     Vehicle* _activeVehicle = nullptr;
 
@@ -59,4 +59,5 @@ private:
     QGeoCoordinate _homeCoord;
 
     QTimer _retryTimer;
+    bool _modelBuilt = false;
 };
