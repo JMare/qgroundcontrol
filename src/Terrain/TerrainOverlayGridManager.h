@@ -47,6 +47,11 @@ private:
         const QGeoCoordinate& targetPos,
         double targetGroundAlt);
 
+    double _computeClearanceMargin(
+        const QGeoCoordinate& dronePos,
+        double droneAlt,
+        const QGeoCoordinate& targetPos,
+        double targetGroundAlt) const;
     void _tryInitialGridSetup();
     void _generateGridAroundHome(const QGeoCoordinate& center);
 

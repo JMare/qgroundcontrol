@@ -139,8 +139,8 @@ void TerrainOverlayGridManager::_generateGridAroundHome(const QGeoCoordinate& ce
     _terrainAltitudes.clear();
     _modelBuilt = false;
 
-    constexpr double spacingMeters = 100.0;
-    constexpr double halfWidthMeters = 1000.0; // 2km x 2km grid
+    constexpr double spacingMeters = 200.0;
+    constexpr double halfWidthMeters = 2000.0; // 2km x 2km grid
 
     double approxLatSpacing = spacingMeters / 111320.0;
     double approxLatHalf = halfWidthMeters / 111320.0;
@@ -247,8 +247,16 @@ void TerrainOverlayGridManager::_updateColorsForVehiclePosition(double vehicleAl
         double groundAlt = _terrainAltitudes[i];
         if (std::isnan(groundAlt)) return 0.0;
 
-        bool los = _hasLineOfSight(dronePos, vehicleAlt, _gridPoints[i], groundAlt);
-        return los ? 0.0 : 100.0;
+        double clearance = _computeClearanceMargin(dronePos, vehicleAlt, _gridPoints[i], groundAlt);
+        double value;
+        if (clearance >= 20.0) {
+            value = 0.0;
+        } else if (clearance <= 0.0) {
+            value = 100.0;
+        } else {
+            value = (20.0 - clearance) / 20.0 * 100.0;
+        }
+        return value;
     });
 
     for (int i = 0; i < numCells; ++i) {
@@ -335,4 +343,39 @@ bool TerrainOverlayGridManager::_hasLineOfSight(
     }
 
     return true; // Clear
+}
+
+double TerrainOverlayGridManager::_computeClearanceMargin(
+    const QGeoCoordinate& dronePos,
+    double droneAlt,
+    const QGeoCoordinate& targetPos,
+    double targetGroundAlt) const
+{
+    constexpr double stepMeters = 200.0;
+    constexpr double bufferAtTarget = 10.0;
+
+    double groundDist = dronePos.distanceTo(targetPos);
+    int numSteps = int(groundDist / stepMeters);
+    if (numSteps < 1) {
+        return droneAlt - targetGroundAlt - bufferAtTarget;
+    }
+
+    double minClearance = std::numeric_limits<double>::max();
+
+    for (int i = 1; i < numSteps; ++i) {
+        double t = double(i) / numSteps;
+        double lat = dronePos.latitude() * (1 - t) + targetPos.latitude() * t;
+        double lon = dronePos.longitude() * (1 - t) + targetPos.longitude() * t;
+        QGeoCoordinate sampleCoord(lat, lon);
+
+        double terrainAlt = _interpolatedTerrainAltitude(sampleCoord);
+        if (std::isnan(terrainAlt)) continue;
+
+        double lineAlt = droneAlt * (1 - t) + (targetGroundAlt + bufferAtTarget) * t;
+        double clearance = lineAlt - terrainAlt;
+
+        minClearance = std::min(minClearance, clearance);
+    }
+
+    return minClearance;
 }
