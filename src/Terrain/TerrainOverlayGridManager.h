@@ -11,10 +11,12 @@
 #include <QObject>
 #include <QVariant>
 #include <QGeoCoordinate>
-#include <QColor>
+#include <QTimer>
 #include <QLoggingCategory>
 
 Q_DECLARE_LOGGING_CATEGORY(TerrainOverlayLog)
+
+class Vehicle;
 
 class TerrainOverlayGridManager : public QObject
 {
@@ -26,17 +28,35 @@ public:
     static TerrainOverlayGridManager* instance();
     static void registerQmlTypes();
 
-    Q_INVOKABLE void loadTilesForViewport(double minLat, double maxLat, double minLon, double maxLon);
     QVariantList model() const { return _gridModel; }
 
 signals:
     void modelChanged();
 
 private:
-    QList<QGeoCoordinate> generateGridPoints(double minLat, double maxLat, double minLon, double maxLon);
-    void updateGridModel(const QList<QGeoCoordinate>& points, const QList<double>& altitudes);
-    QColor altitudeToColor(double altitude) const;
+    void _connectActiveVehicle();
+    void _activeVehicleChanged(Vehicle* vehicle);
+    void _vehicleCoordinateChanged(const QGeoCoordinate& newCoord);
+
+    void _tryInitialGridSetup();
+    void _generateGridAroundHome(const QGeoCoordinate& center);
+    void _requestTerrainAltitudes();
+    void _updateColorsForVehiclePosition(double vehicleAlt);
+
+    bool _hasAllTerrainData() const;
+    void _startRetryTimer();
+    void _stopRetryTimer();
+
+    static TerrainOverlayGridManager* _instance;
+
+    Vehicle* _activeVehicle = nullptr;
 
     QVariantList _gridModel;
-    static TerrainOverlayGridManager* _instance;
+    QList<QGeoCoordinate> _gridPoints;
+    QList<double> _terrainAltitudes;
+
+    double _lastVehicleAltitude = 0.0;
+    QGeoCoordinate _homeCoord;
+
+    QTimer _retryTimer;
 };

@@ -78,23 +78,6 @@ FlightMap {
         if (_saveZoomLevelSetting) {
             QGroundControl.flightMapZoom = _root.zoomLevel
         }
-        if (_root.width > 0 && _root.height > 0) {
-            var topLeft = _root.toCoordinate(Qt.point(0, 0))
-            var bottomRight = _root.toCoordinate(Qt.point(_root.width, _root.height))
-
-            if (topLeft.isValid && bottomRight.isValid) {
-                var minLat = Math.min(topLeft.latitude, bottomRight.latitude)
-                var maxLat = Math.max(topLeft.latitude, bottomRight.latitude)
-                var minLon = Math.min(topLeft.longitude, bottomRight.longitude)
-                var maxLon = Math.max(topLeft.longitude, bottomRight.longitude)
-
-                terrainOverlayGridManager.loadTilesForViewport(minLat, maxLat, minLon, maxLon)
-            } else {
-                console.log("[Overlay] Skipped: corners invalid")
-            }
-        } else {
-            console.log("[Overlay] Skipped: map has no size")
-        }
     }
     onCenterChanged: {
         QGroundControl.flightMapPosition = _root.center
@@ -368,13 +351,9 @@ MapItemView {
                 0.33 - 0.33 * modelData.value / 100,
                 1,
                 0.5,
-                0.8
+                0.4
             )
             border.width: 0
-
-            Component.onCompleted: {
-                console.log("[Overlay Dot] At", modelData.lat, modelData.lon, "Value", modelData.value)
-            }
         }
     }
 }
