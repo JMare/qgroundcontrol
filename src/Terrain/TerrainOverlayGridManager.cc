@@ -34,11 +34,16 @@ void TerrainOverlayGridManager::registerQmlTypes()
         "TerrainOverlayGridManager",
         "Reference only"
     );
+
+    qmlRegisterType<TerrainOverlayGridModel>("QGroundControl.TerrainOverlayGridModel", 1, 0, "TerrainOverlayGridModel");
 }
 
 TerrainOverlayGridManager::TerrainOverlayGridManager(QObject* parent)
     : QObject(parent)
 {
+
+    _gridModel = new TerrainOverlayGridModel(this);
+
     qCDebug(TerrainOverlayLog) << "TerrainOverlayGridManager initialized";
 
     connect(&_retryTimer, &QTimer::timeout, this, &TerrainOverlayGridManager::_requestTerrainAltitudes);
@@ -81,7 +86,7 @@ void TerrainOverlayGridManager::_activeVehicleChanged(Vehicle* vehicle)
         _vehicleCoordinateChanged(_activeVehicle->coordinate());
     } else {
         qCDebug(TerrainOverlayLog) << "[Overlay] No active vehicle. Clearing grid.";
-        _gridModel.clear();
+        _gridModel->setCells({});
         _gridPoints.clear();
         _terrainAltitudes.clear();
         _modelBuilt = false;
@@ -108,6 +113,7 @@ void TerrainOverlayGridManager::_vehicleCoordinateChanged(const QGeoCoordinate& 
         _homeCoord = newCoord;
         _tryInitialGridSetup();
     } else if (_modelBuilt) {
+        qCDebug(TerrainOverlayLog) << "Model already built, updating";
         _updateColorsForVehiclePosition(vehicleAlt);
     }
 }
@@ -193,7 +199,7 @@ void TerrainOverlayGridManager::_requestTerrainAltitudes()
 
 void TerrainOverlayGridManager::_buildInitialModel()
 {
-    _gridModel.clear();
+    QList<TerrainGridCell> cells;
     int numCells = qMin(_gridPoints.count(), _terrainAltitudes.count());
 
     for (int i = 0; i < numCells; ++i) {
@@ -206,18 +212,19 @@ void TerrainOverlayGridManager::_buildInitialModel()
         double value = (relativeAlt + 50.0) / 100.0;
         value = qBound(0.0, value, 1.0) * 100.0;
 
-        QVariantMap cell;
-        cell["lat"] = _gridPoints[i].latitude();
-        cell["lon"] = _gridPoints[i].longitude();
-        cell["altitude"] = groundAlt;
-        cell["value"] = value;
+        TerrainGridCell cell;
+        cell.latitude = _gridPoints[i].latitude();
+        cell.longitude = _gridPoints[i].longitude();
+        cell.altitude = groundAlt;
+        cell.value = value;
 
-        _gridModel.append(cell);
+        cells.append(cell);
     }
 
     _modelBuilt = true;
-    qCDebug(TerrainOverlayLog) << "[Overlay] Initial model built with" << _gridModel.count() << "cells.";
-    emit modelChanged();
+    _gridModel->setCells(cells);
+
+    qCDebug(TerrainOverlayLog) << "[Overlay] Initial model built with" << cells.count() << "cells.";
 }
 
 void TerrainOverlayGridManager::_updateColorsForVehiclePosition(double vehicleAlt)
@@ -226,25 +233,17 @@ void TerrainOverlayGridManager::_updateColorsForVehiclePosition(double vehicleAl
         return;
     }
 
-    bool changed = false;
-    for (int i = 0; i < _gridModel.size(); ++i) {
-        QVariantMap cell = _gridModel[i].toMap();
-        double groundAlt = cell["altitude"].toDouble();
+    if (!_modelBuilt) {
+        return;
+    }
 
+    for (int i = 0; i < _gridPoints.size(); ++i) {
+        double groundAlt = _terrainAltitudes[i];
         double relativeAlt = vehicleAlt - groundAlt;
         double value = (relativeAlt + 50.0) / 100.0;
         value = qBound(0.0, value, 1.0) * 100.0;
 
-        if (!qFuzzyCompare(cell["value"].toDouble() + 1, value + 1)) {
-            cell["value"] = value;
-            _gridModel[i] = cell;
-            changed = true;
-        }
-    }
-
-    if (changed) {
-        qCDebug(TerrainOverlayLog) << "[Overlay] Model recolored in-place with" << _gridModel.count() << "cells.";
-        emit modelChanged();
+        _gridModel->updateCellValue(i, value);
     }
 }
 

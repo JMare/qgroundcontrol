@@ -13,6 +13,7 @@
 #include <QGeoCoordinate>
 #include <QTimer>
 #include <QLoggingCategory>
+#include "TerrainOverlayGridModel.h"
 
 Q_DECLARE_LOGGING_CATEGORY(TerrainOverlayLog)
 
@@ -21,14 +22,14 @@ class Vehicle;
 class TerrainOverlayGridManager : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(QVariantList model READ model NOTIFY modelChanged)
+    Q_PROPERTY(QAbstractListModel* model READ model CONSTANT)
 
 public:
     explicit TerrainOverlayGridManager(QObject* parent = nullptr);
     static TerrainOverlayGridManager* instance();
     static void registerQmlTypes();
 
-    QVariantList model() const { return _gridModel; }
+    QAbstractListModel* model() const { return _gridModel; }
 
 signals:
     void modelChanged();
@@ -51,7 +52,7 @@ private:
 
     Vehicle* _activeVehicle = nullptr;
 
-    QVariantList _gridModel;
+    TerrainOverlayGridModel* _gridModel = nullptr;
     QList<QGeoCoordinate> _gridPoints;
     QList<double> _terrainAltitudes;
 

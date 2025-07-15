@@ -335,20 +335,18 @@ MapItemView {
     model: terrainOverlayGridManager.model
 
     delegate: MapQuickItem {
-        coordinate: QtPositioning.coordinate(modelData.lat, modelData.lon)
+        coordinate: QtPositioning.coordinate(latitude, longitude)
         anchorPoint.x: dot.width / 2
         anchorPoint.y: dot.height / 2
         z: QGroundControl.zOrderMapItems
 
         sourceItem: Rectangle {
             id: dot
-
             width: 8
             height: 8
             radius: 4
             color: Qt.hsla(
-                // interpolate from green (120deg = 0.33) to red (0deg = 0.0)
-                0.33 - 0.33 * modelData.value / 100,
+                0.33 - 0.33 * value / 100,
                 1,
                 0.5,
                 0.4
