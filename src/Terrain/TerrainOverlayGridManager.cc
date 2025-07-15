@@ -114,7 +114,6 @@ void TerrainOverlayGridManager::_vehicleCoordinateChanged(const QGeoCoordinate& 
         _homeCoord = newCoord;
         _tryInitialGridSetup();
     } else if (_modelBuilt) {
-        qCDebug(TerrainOverlayLog) << "Model already built, updating";
         _updateColorsForVehiclePosition(vehicleAlt);
     }
 }
