@@ -129,7 +129,7 @@ private:
     bool compressEvent(QEvent *event, QObject *receiver, QPostEventList *postedEvents) final;
 
     void _initVideo();
-    
+
     /// Initialize the application for normal application boot. Or in other words we are not going to run unit tests.
     void _initForNormalAppBoot();
 
@@ -137,7 +137,7 @@ private:
     void _checkForNewVersion();
 
     bool _runningUnitTests = false;
-    bool _simpleBootTest = false; 
+    bool _simpleBootTest = false;
     static constexpr int _missingParamsDelayedDisplayTimerTimeout = 1000;   ///< Timeout to wait for next missing fact to come in before display
     QTimer _missingParamsDelayedDisplayTimer;                               ///< Timer use to delay missing fact display
     QList<QPair<int,QString>> _missingParams;                               ///< List of missing parameter component id:name

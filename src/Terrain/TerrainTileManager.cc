@@ -325,10 +325,16 @@ QList<TerrainTile*> TerrainTileManager::findTilesForBounds(double minLat, double
     QMutexLocker locker(&_tilesMutex);
     QList<TerrainTile*> result;
 
+    qCDebug(TerrainTileManagerLog) << "Looping tiles";
     for (auto* tile : _tiles) {
+        qCDebug(TerrainTileManagerLog) << "checking tile";
         if (!tile || !tile->isValid())
             continue;
 
+    const auto& info = tile->tileInfo();
+    qCDebug(TerrainTileManagerLog) << "[findTilesForBounds] Tile bounds:"
+                                    << "SW:" << info.swLat << "," << info.swLon
+                                    << "NE:" << info.neLat << "," << info.neLon;
         // Check if tile bounds overlap requested bounds
         if (tile->_tileInfo.neLat < minLat || tile->_tileInfo.swLat > maxLat)
             continue;

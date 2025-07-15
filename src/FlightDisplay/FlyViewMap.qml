@@ -22,7 +22,7 @@ import QGroundControl.FlightMap
 import QGroundControl.Palette
 import QGroundControl.ScreenTools
 import QGroundControl.Vehicle
-import Custom.TerrainOverlay 1.0
+import QGroundControl.TerrainOverlayGridManager
 
 FlightMap {
     id:                         _root
@@ -88,7 +88,7 @@ FlightMap {
                 var minLon = Math.min(topLeft.longitude, bottomRight.longitude)
                 var maxLon = Math.max(topLeft.longitude, bottomRight.longitude)
 
-                terrainOverlay.loadTilesForViewport(minLat, maxLat, minLon, maxLon)
+                terrainOverlayGridManager.loadTilesForViewport(minLat, maxLat, minLon, maxLon)
             } else {
                 console.log("[Overlay] Skipped: corners invalid")
             }
@@ -348,33 +348,37 @@ FlightMap {
 // DEMO: Altitude-colored tile overlay
 // --------------------
 
-
-TerrainOverlayGridManager {
-    id: terrainOverlay
-}
-
 MapItemView {
-    model: terrainOverlay.model
+    model: terrainOverlayGridManager.model
 
-    delegate: MapPolygon {
-        border.color: "black"
-        border.width: 2
-        color: model.color
-        opacity: 0.4
+    delegate: MapQuickItem {
+        coordinate: QtPositioning.coordinate(modelData.lat, modelData.lon)
+        anchorPoint.x: dot.width / 2
+        anchorPoint.y: dot.height / 2
+        z: QGroundControl.zOrderMapItems
 
-        path: [
-            QtPositioning.coordinate(model.lat + deltaLat, model.lon - deltaLon),
-            QtPositioning.coordinate(model.lat + deltaLat, model.lon + deltaLon),
-            QtPositioning.coordinate(model.lat - deltaLat, model.lon + deltaLon),
-            QtPositioning.coordinate(model.lat - deltaLat, model.lon - deltaLon),
-            QtPositioning.coordinate(model.lat + deltaLat, model.lon - deltaLon)
-        ]
+        sourceItem: Rectangle {
+            id: dot
 
-        property real meters: 50
-        property real deltaLat: meters / 111320
-        property real deltaLon: meters / (111320 * Math.cos(model.lat * Math.PI / 180))
+            width: 8
+            height: 8
+            radius: 4
+            color: Qt.hsla(
+                // interpolate from green (120deg = 0.33) to red (0deg = 0.0)
+                0.33 - 0.33 * modelData.value / 100,
+                1,
+                0.5,
+                0.8
+            )
+            border.width: 0
+
+            Component.onCompleted: {
+                console.log("[Overlay Dot] At", modelData.lat, modelData.lon, "Value", modelData.value)
+            }
+        }
     }
 }
+
     // Allow custom builds to add map items
     CustomMapItems {
         map:            _root

@@ -276,8 +276,8 @@ void QGCApplication::init()
 #ifdef QGC_VIEWER3D
     Viewer3DManager::registerQmlTypes();
 #endif
+TerrainOverlayGridManager::registerQmlTypes();
 
-    qmlRegisterType<TerrainOverlayGridManager>("Custom.TerrainOverlay", 1, 0, "TerrainOverlayGridManager");
     qmlRegisterUncreatableType<GimbalController>("QGroundControl.Vehicle", 1, 0, "GimbalController", "Reference only");
 
 #ifndef QGC_DISABLE_MAVLINK_INSPECTOR
@@ -351,6 +351,8 @@ void QGCApplication::_initForNormalAppBoot()
     QGCPositionManager::instance()->init();
     LinkManager::instance()->init();
     VideoManager::instance()->init(mainRootWindow());
+
+    TerrainOverlayGridManager::instance();
 
     // Image provider for Optical Flow
     _qmlAppEngine->addImageProvider(_qgcImageProviderId, new QGCImageProvider());
