@@ -13,6 +13,7 @@
 #include "TerrainOverlayGridManager.h"
 #include "TerrainTileManager.h"
 
+#include <QtConcurrent>
 #include <QtMath>
 #include <QVariantMap>
 #include <QtCore/QMetaObject>
@@ -234,16 +235,24 @@ void TerrainOverlayGridManager::_updateColorsForVehiclePosition(double vehicleAl
     }
 
     QGeoCoordinate dronePos = _activeVehicle->coordinate();
+    int numCells = _gridPoints.size();
 
-    for (int i = 0; i < _gridPoints.size(); ++i) {
+    QVector<int> indices;
+    indices.reserve(numCells);
+    for (int i = 0; i < numCells; ++i) {
+        indices.append(i);
+    }
+
+    QVector<double> newValues = QtConcurrent::blockingMapped(indices, [this, &dronePos, vehicleAlt](int i) {
         double groundAlt = _terrainAltitudes[i];
-        if (std::isnan(groundAlt)) continue;
+        if (std::isnan(groundAlt)) return 0.0;
 
         bool los = _hasLineOfSight(dronePos, vehicleAlt, _gridPoints[i], groundAlt);
+        return los ? 0.0 : 100.0;
+    });
 
-        double value = los ? 0.0 : 100.0;
-
-        _gridModel->updateCellValue(i, value);
+    for (int i = 0; i < numCells; ++i) {
+        _gridModel->updateCellValue(i, newValues[i]);
     }
 }
 
