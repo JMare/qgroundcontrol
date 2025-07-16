@@ -114,7 +114,7 @@ void TerrainOverlayGridManager::_generateGrid(const QGeoCoordinate& center)
 {
     _altitudes.clear();
 
-    constexpr double halfWidthMeters = 500.0;
+    constexpr double halfWidthMeters = 4000.0;
 
     double approxLatSpacing = _spacingMeters / 111320.0;
     double approxLatHalf = halfWidthMeters / 111320.0;

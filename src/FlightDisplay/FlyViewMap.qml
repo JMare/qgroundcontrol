@@ -331,14 +331,66 @@ FlightMap {
 // --------------------
 // DEMO: Altitude-colored tile overlay
 // --------------------
+MapQuickItem {
+    id: terrainOverlay
+    z: QGroundControl.zOrderMapItems
 
-Image {
-    id: terrainHeatmap
-    anchors.fill: parent
-    source: "image://terrainoverlay/heatmap?" + terrainOverlayMapRenderer.lastUpdateCounter
-    opacity: 0.5
-    fillMode: Image.Stretch
-    visible: true
+    // Anchor the image's top-left corner at (maxLat, minLon)
+    coordinate: QtPositioning.coordinate(terrainOverlayMapRenderer.maxLat, terrainOverlayMapRenderer.minLon)
+    anchorPoint.x: 0
+    anchorPoint.y: 0
+
+    //zoomLevel: _root.zoomLevel
+    zoomLevel: terrainOverlayMapRenderer.overlayNativeZoomLevel
+
+    visible: terrainOverlayMapRenderer.lastUpdateCounter > 0
+
+    // The heatmap itself
+    sourceItem: Image {
+        id: heatmapImage
+        source: "image://terrainoverlay/heatmap?" + terrainOverlayMapRenderer.lastUpdateCounter
+        opacity: 0.5
+        fillMode: Image.Stretch
+        //width:  terrainOverlay.overlayWidth
+        //height: terrainOverlay.overlayHeight
+        //width:  200
+        //height: 200
+
+        onSourceChanged: console.log("[Overlay Image] source changed to", source)
+        Component.onCompleted: console.log("[Overlay Image] Component created. Source:", source)
+        onWidthChanged: console.log("[Overlay Image] Width:", width)
+        onHeightChanged: console.log("[Overlay Image] Height:", height)
+    }
+
+    // Dynamically compute overlay width in map pixels
+    property real overlayWidth: {
+        if (!_root || !terrainOverlayMapRenderer) return 100
+        if (terrainOverlayMapRenderer.maxLat === 0 || terrainOverlayMapRenderer.minLon === 0) return 100
+        var p1 = _root.fromCoordinate(QtPositioning.coordinate(terrainOverlayMapRenderer.maxLat, terrainOverlayMapRenderer.minLon), false)
+        var p2 = _root.fromCoordinate(QtPositioning.coordinate(terrainOverlayMapRenderer.maxLat, terrainOverlayMapRenderer.maxLon), false)
+        var w = Math.abs(p2.x - p1.x)
+        return w > 0 ? w : 100
+    }
+
+    // Dynamically compute overlay height in map pixels
+    property real overlayHeight: {
+        if (!_root || !terrainOverlayMapRenderer) return 100
+        if (terrainOverlayMapRenderer.maxLat === 0 || terrainOverlayMapRenderer.minLon === 0) return 100
+        var p1 = _root.fromCoordinate(QtPositioning.coordinate(terrainOverlayMapRenderer.maxLat, terrainOverlayMapRenderer.minLon), false)
+        var p2 = _root.fromCoordinate(QtPositioning.coordinate(terrainOverlayMapRenderer.minLat, terrainOverlayMapRenderer.minLon), false)
+        var h = Math.abs(p2.y - p1.y)
+        return h > 0 ? h : 100
+    }
+
+    // Debug logs for testing
+    Component.onCompleted: {
+        console.log("[Overlay] coordinate:", coordinate)
+        console.log("[Overlay] overlayWidth:", overlayWidth, "overlayHeight:", overlayHeight)
+    }
+
+    onCoordinateChanged: console.log("[Overlay] coordinate changed:", coordinate)
+    onOverlayWidthChanged: console.log("[Overlay] overlayWidth changed:", overlayWidth)
+    onOverlayHeightChanged: console.log("[Overlay] overlayHeight changed:", overlayHeight)
 }
 
     // Allow custom builds to add map items

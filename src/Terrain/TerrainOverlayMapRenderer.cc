@@ -139,16 +139,18 @@ void TerrainOverlayMapRenderer::_generateHeatmapImage(const QVariantMap& grid)
 
             QColor color = Qt::transparent;
             if (!std::isnan(alt)) {
-                double norm = (alt - minAlt) / (maxAlt - minAlt);
+                constexpr double greenAlt = 200.0;
+                constexpr double redAlt = 400.0;
+                double norm = (alt - greenAlt) / (redAlt - greenAlt);
                 norm = std::clamp(norm, 0.0, 1.0);
 
                 int r = int(255 * norm);
                 int g = int(255 * (1.0 - norm));
-                int b = 128;
+                int b = 0;
 
                 color = QColor(r, g, b, 200);
             }
-            image.setPixelColor(col, row, color);
+            image.setPixelColor(col, rows - 1 - row, color);
         }
     }
 
@@ -157,6 +159,53 @@ void TerrainOverlayMapRenderer::_generateHeatmapImage(const QVariantMap& grid)
         qCDebug(TerrainOverlayMapLog) << "[MapRenderer] Image pushed to provider.";
     }
 
+    // Compute overlayNativeZoomLevel
+    _computeOverlayNativeZoomLevel(image.width(), image.height());
+
     _updateCounter++;
     emit heatmapImageChanged();
+}
+
+
+void TerrainOverlayMapRenderer::_computeOverlayNativeZoomLevel(int imageWidth, int imageHeight)
+{
+    if (imageWidth <= 0 || imageHeight <= 0) {
+        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Cannot compute native zoom level: invalid image size.";
+        _overlayNativeZoomLevel = 0.0;
+        return;
+    }
+
+    QGeoCoordinate topLeft(_maxLat, _minLon);
+    QGeoCoordinate topRight(_maxLat, _maxLon);
+    QGeoCoordinate bottomLeft(_minLat, _minLon);
+
+    double realWidthMeters = topLeft.distanceTo(topRight);
+    double realHeightMeters = topLeft.distanceTo(bottomLeft);
+
+    if (realWidthMeters <= 0 || realHeightMeters <= 0) {
+        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Cannot compute native zoom level: invalid bounds.";
+        _overlayNativeZoomLevel = 0.0;
+        return;
+    }
+
+    double metersPerPixelX = realWidthMeters / imageWidth;
+    double metersPerPixelY = realHeightMeters / imageHeight;
+    double avgMetersPerPixel = (metersPerPixelX + metersPerPixelY) / 2.0;
+
+    constexpr double earthCircumference = 40075016.686;
+    constexpr double tileSize = 256.0;
+
+    double centerLat = (_minLat + _maxLat) / 2.0;
+    double cosLat = std::cos(qDegreesToRadians(centerLat));
+
+    if (cosLat <= 0.0) {
+        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Cannot compute native zoom level: invalid latitude.";
+        _overlayNativeZoomLevel = 0.0;
+        return;
+    }
+
+    _overlayNativeZoomLevel = std::log2((earthCircumference * cosLat) / (avgMetersPerPixel * tileSize));
+    qCDebug(TerrainOverlayMapLog) << "[MapRenderer] Computed overlayNativeZoomLevel:" << _overlayNativeZoomLevel;
+
+    emit boundsChanged();
 }
