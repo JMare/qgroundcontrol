@@ -34,6 +34,7 @@
 
 #include <QtCore/private/qthread_p.h>
 
+#include "HeatmapImageProvider.h"
 #include "QGCLogging.h"
 #include "AudioOutput.h"
 #include "AutoPilotPlugin.h"
@@ -71,6 +72,7 @@
 #include "VideoManager.h"
 #include "TerrainOverlayGridManager.h"
 #include "TerrainOverlayMapRenderer.h"
+#include "HeatmapImageProvider.h"
 
 #ifndef QGC_DISABLE_MAVLINK_INSPECTOR
 #include "MAVLinkInspectorController.h"
@@ -345,6 +347,8 @@ void QGCApplication::_initForNormalAppBoot()
     MAVLinkProtocol::instance()->init();
     MultiVehicleManager::instance()->init();
     _qmlAppEngine = QGCCorePlugin::instance()->createQmlApplicationEngine(this);
+
+    _qmlAppEngine->addImageProvider("terrainoverlay", HeatmapImageProvider::instance());
     QObject::connect(_qmlAppEngine, &QQmlApplicationEngine::objectCreationFailed, this, QCoreApplication::quit, Qt::QueuedConnection);
     QGCCorePlugin::instance()->createRootWindow(_qmlAppEngine);
 
@@ -359,6 +363,7 @@ void QGCApplication::_initForNormalAppBoot()
 
     // Image provider for Optical Flow
     _qmlAppEngine->addImageProvider(_qgcImageProviderId, new QGCImageProvider());
+
 
     // Safe to show popup error messages now that main window is created
     _showErrorsInToolbar = true;

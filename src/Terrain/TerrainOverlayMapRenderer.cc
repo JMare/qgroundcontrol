@@ -8,6 +8,7 @@
 
 #include "TerrainOverlayMapRenderer.h"
 #include "TerrainOverlayGridManager.h"
+#include "HeatmapImageProvider.h"
 
 #include <QVariant>
 #include <QVariantMap>
@@ -15,13 +16,13 @@
 #include <QtCore/qapplicationstatic.h>
 #include "QGCLoggingCategory.h"
 
-QGC_LOGGING_CATEGORY(TerrainOverlayMapLog, "qgc.terrainoverlay.maprenderer")
+QGC_LOGGING_CATEGORY(TerrainOverlayMapLog, "qgc.terrainoverlay.maprenderer");
 
 Q_APPLICATION_STATIC(TerrainOverlayMapRenderer, _instance);
 
 TerrainOverlayMapRenderer* TerrainOverlayMapRenderer::instance()
 {
-    return _instance();
+    return _instance;
 }
 
 void TerrainOverlayMapRenderer::registerQmlTypes()
@@ -38,6 +39,12 @@ TerrainOverlayMapRenderer::TerrainOverlayMapRenderer(QObject* parent)
 {
     qCDebug(TerrainOverlayMapLog) << "[MapRenderer] Initializing singleton.";
     _connectToManager();
+    setImageProvider(HeatmapImageProvider::instance());
+}
+
+void TerrainOverlayMapRenderer::setImageProvider(HeatmapImageProvider* provider)
+{
+    _imageProvider = provider;
 }
 
 void TerrainOverlayMapRenderer::_connectToManager()
@@ -135,20 +142,21 @@ void TerrainOverlayMapRenderer::_generateHeatmapImage(const QVariantMap& grid)
                 double norm = (alt - minAlt) / (maxAlt - minAlt);
                 norm = std::clamp(norm, 0.0, 1.0);
 
-                // Simple blue → green → red gradient
                 int r = int(255 * norm);
                 int g = int(255 * (1.0 - norm));
                 int b = 128;
 
-                color = QColor(r, g, b, 200); // Semi-transparent
+                color = QColor(r, g, b, 200);
             }
             image.setPixelColor(col, row, color);
         }
     }
 
-    _heatmapImage = image;
-    emit heatmapImageChanged();
+    if (_imageProvider) {
+        _imageProvider->setImage(image);
+        qCDebug(TerrainOverlayMapLog) << "[MapRenderer] Image pushed to provider.";
+    }
 
-    qCDebug(TerrainOverlayMapLog) << "[MapRenderer] Heatmap image generated:"
-                                   << image.width() << "x" << image.height();
+    _updateCounter++;
+    emit heatmapImageChanged();
 }

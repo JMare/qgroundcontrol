@@ -12,12 +12,14 @@
 #include <QImage>
 #include <QLoggingCategory>
 
+class HeatmapImageProvider;
+
 Q_DECLARE_LOGGING_CATEGORY(TerrainOverlayMapLog)
 
 class TerrainOverlayMapRenderer : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(QImage heatmapImage READ heatmapImage NOTIFY heatmapImageChanged)
+    Q_PROPERTY(int lastUpdateCounter READ lastUpdateCounter NOTIFY heatmapImageChanged)
     Q_PROPERTY(double minLat READ minLat NOTIFY boundsChanged)
     Q_PROPERTY(double minLon READ minLon NOTIFY boundsChanged)
     Q_PROPERTY(double maxLat READ maxLat NOTIFY boundsChanged)
@@ -29,7 +31,9 @@ public:
     static TerrainOverlayMapRenderer* instance();
     static void registerQmlTypes();
 
-    QImage heatmapImage() const { return _heatmapImage; }
+    void setImageProvider(HeatmapImageProvider* provider);
+
+    int lastUpdateCounter() const { return _updateCounter; }
     double minLat() const { return _minLat; }
     double minLon() const { return _minLon; }
     double maxLat() const { return _maxLat; }
@@ -47,7 +51,9 @@ private:
     void _generateHeatmapImage(const QVariantMap& grid);
     void _computeBounds(const QVariantMap& grid);
 
-    QImage _heatmapImage;
+    HeatmapImageProvider* _imageProvider = nullptr;
+    int _updateCounter = 0;
+
     double _minLat = 0.0;
     double _minLon = 0.0;
     double _maxLat = 0.0;

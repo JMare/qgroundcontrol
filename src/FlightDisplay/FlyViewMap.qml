@@ -332,15 +332,13 @@ FlightMap {
 // DEMO: Altitude-colored tile overlay
 // --------------------
 
-
-MapImageOverlay {
-    source: TerrainOverlayMapRenderer.instance().heatmapImage
-    north:  TerrainOverlayMapRenderer.instance().maxLat
-    south:  TerrainOverlayMapRenderer.instance().minLat
-    east:   TerrainOverlayMapRenderer.instance().maxLon
-    west:   TerrainOverlayMapRenderer.instance().minLon
+Image {
+    id: terrainHeatmap
+    anchors.fill: parent
+    source: "image://terrainoverlay/heatmap?" + terrainOverlayMapRenderer.lastUpdateCounter
     opacity: 0.5
-    z: QGroundControl.zOrderMapItems
+    fillMode: Image.Stretch
+    visible: true
 }
 
     // Allow custom builds to add map items

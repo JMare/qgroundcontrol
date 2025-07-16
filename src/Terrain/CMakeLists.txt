@@ -19,6 +19,8 @@ target_sources(${CMAKE_PROJECT_NAME}
         TerrainOverlayGridModel.h
         TerrainOverlayMapRenderer.cc
         TerrainOverlayMapRenderer.h
+        HeatmapImageProvider.cc
+        HeatmapImageProvider.h
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME}
