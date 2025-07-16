@@ -23,6 +23,7 @@ import QGroundControl.Palette
 import QGroundControl.ScreenTools
 import QGroundControl.Vehicle
 import QGroundControl.TerrainOverlayGridManager
+import QGroundControl.TerrainOverlayMapRenderer
 
 FlightMap {
     id:                         _root
@@ -331,29 +332,15 @@ FlightMap {
 // DEMO: Altitude-colored tile overlay
 // --------------------
 
-MapItemView {
-    model: terrainOverlayGridManager.model
 
-    delegate: MapQuickItem {
-        coordinate: QtPositioning.coordinate(latitude, longitude)
-        anchorPoint.x: dot.width / 2
-        anchorPoint.y: dot.height / 2
-        z: QGroundControl.zOrderMapItems
-
-        sourceItem: Rectangle {
-            id: dot
-            width: 8
-            height: 8
-            radius: 4
-            color: Qt.hsla(
-                0.33 - 0.33 * value / 100,
-                1,
-                0.5,
-                0.4
-            )
-            border.width: 0
-        }
-    }
+MapImageOverlay {
+    source: TerrainOverlayMapRenderer.instance().heatmapImage
+    north:  TerrainOverlayMapRenderer.instance().maxLat
+    south:  TerrainOverlayMapRenderer.instance().minLat
+    east:   TerrainOverlayMapRenderer.instance().maxLon
+    west:   TerrainOverlayMapRenderer.instance().minLon
+    opacity: 0.5
+    z: QGroundControl.zOrderMapItems
 }
 
     // Allow custom builds to add map items

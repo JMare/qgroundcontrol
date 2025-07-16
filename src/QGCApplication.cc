@@ -278,6 +278,7 @@ void QGCApplication::init()
     Viewer3DManager::registerQmlTypes();
 #endif
 TerrainOverlayGridManager::registerQmlTypes();
+TerrainOverlayMapRenderer::registerQmlTypes();
 
     qmlRegisterUncreatableType<GimbalController>("QGroundControl.Vehicle", 1, 0, "GimbalController", "Reference only");
 

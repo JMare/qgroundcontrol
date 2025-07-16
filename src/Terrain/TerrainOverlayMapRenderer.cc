@@ -11,10 +11,11 @@
 
 #include <QVariant>
 #include <QVariantMap>
+#include <QtMath>
 #include <QtCore/qapplicationstatic.h>
 #include "QGCLoggingCategory.h"
 
-QGC_LOGGING_CATEGORY(TerrainOverlayMapLog, "qgc.terrainoverlay.maprenderer");
+QGC_LOGGING_CATEGORY(TerrainOverlayMapLog, "qgc.terrainoverlay.maprenderer")
 
 Q_APPLICATION_STATIC(TerrainOverlayMapRenderer, _instance);
 
@@ -44,20 +45,110 @@ void TerrainOverlayMapRenderer::_connectToManager()
     auto* manager = TerrainOverlayGridManager::instance();
 
     connect(manager, &TerrainOverlayGridManager::gridChanged,
-            this, &TerrainOverlayMapRenderer::_onGridDataAvailable);
+            this, &TerrainOverlayMapRenderer::_onGridChanged);
 
     qCDebug(TerrainOverlayMapLog) << "[MapRenderer] Connected to TerrainOverlayGridManager signals.";
 }
 
-void TerrainOverlayMapRenderer::_onGridDataAvailable()
+void TerrainOverlayMapRenderer::_onGridChanged()
 {
     auto* manager = TerrainOverlayGridManager::instance();
     QVariantMap grid = manager->grid().toMap();
 
+    qCDebug(TerrainOverlayMapLog) << "[MapRenderer] Received new grid.";
+
+    _computeBounds(grid);
+    _generateHeatmapImage(grid);
+}
+
+void TerrainOverlayMapRenderer::_computeBounds(const QVariantMap& grid)
+{
+    double centerLat = grid.value("centerLat").toDouble();
+    double centerLon = grid.value("centerLon").toDouble();
+    double spacingMeters = grid.value("spacingMeters").toDouble();
     int rows = grid.value("rows").toInt();
     int cols = grid.value("cols").toInt();
-    qCDebug(TerrainOverlayMapLog) << "[MapRenderer] Received grid with" << rows << "rows x" << cols << "cols.";
 
-    // Placeholder: Here we would prepare data for map rendering.
-    // For now, just log that we received it.
+    if (rows <= 0 || cols <= 0) {
+        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Invalid grid dimensions for bounds.";
+        return;
+    }
+
+    double latSpacing = spacingMeters / 111320.0;
+    double centerLatRad = qDegreesToRadians(centerLat);
+    double metersPerDegLon = 111320.0 * std::cos(centerLatRad);
+    double lonSpacing = spacingMeters / metersPerDegLon;
+
+    int centerRow = rows / 2;
+    int centerCol = cols / 2;
+
+    _minLat = centerLat - centerRow * latSpacing;
+    _maxLat = centerLat + (rows - centerRow - 1) * latSpacing;
+    _minLon = centerLon - centerCol * lonSpacing;
+    _maxLon = centerLon + (cols - centerCol - 1) * lonSpacing;
+
+    qCDebug(TerrainOverlayMapLog) << "[MapRenderer] Bounds computed:"
+                                   << "Lat [" << _minLat << "," << _maxLat << "]"
+                                   << "Lon [" << _minLon << "," << _maxLon << "]";
+
+    emit boundsChanged();
+}
+
+void TerrainOverlayMapRenderer::_generateHeatmapImage(const QVariantMap& grid)
+{
+    int rows = grid.value("rows").toInt();
+    int cols = grid.value("cols").toInt();
+    QVariantList altitudes = grid.value("altitudes").toList();
+
+    if (rows <= 0 || cols <= 0 || altitudes.isEmpty()) {
+        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Invalid grid dimensions or data.";
+        return;
+    }
+
+    // Find min/max altitude
+    double minAlt = std::numeric_limits<double>::max();
+    double maxAlt = std::numeric_limits<double>::lowest();
+
+    for (const QVariant& val : altitudes) {
+        double alt = val.toDouble();
+        if (!std::isnan(alt)) {
+            minAlt = std::min(minAlt, alt);
+            maxAlt = std::max(maxAlt, alt);
+        }
+    }
+
+    if (minAlt >= maxAlt) {
+        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Altitude range invalid.";
+        return;
+    }
+
+    // Create image
+    QImage image(cols, rows, QImage::Format_ARGB32);
+
+    for (int row = 0; row < rows; ++row) {
+        for (int col = 0; col < cols; ++col) {
+            int index = row * cols + col;
+            double alt = altitudes.value(index).toDouble();
+
+            QColor color = Qt::transparent;
+            if (!std::isnan(alt)) {
+                double norm = (alt - minAlt) / (maxAlt - minAlt);
+                norm = std::clamp(norm, 0.0, 1.0);
+
+                // Simple blue → green → red gradient
+                int r = int(255 * norm);
+                int g = int(255 * (1.0 - norm));
+                int b = 128;
+
+                color = QColor(r, g, b, 200); // Semi-transparent
+            }
+            image.setPixelColor(col, row, color);
+        }
+    }
+
+    _heatmapImage = image;
+    emit heatmapImageChanged();
+
+    qCDebug(TerrainOverlayMapLog) << "[MapRenderer] Heatmap image generated:"
+                                   << image.width() << "x" << image.height();
 }
