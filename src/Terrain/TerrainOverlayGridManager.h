@@ -9,11 +9,9 @@
 #pragma once
 
 #include <QObject>
-#include <QVariant>
 #include <QGeoCoordinate>
 #include <QTimer>
 #include <QLoggingCategory>
-#include "TerrainOverlayGridModel.h"
 
 Q_DECLARE_LOGGING_CATEGORY(TerrainOverlayLog)
 
@@ -22,56 +20,36 @@ class Vehicle;
 class TerrainOverlayGridManager : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(QAbstractListModel* model READ model CONSTANT)
+    Q_PROPERTY(QList<QVariant> gridData READ gridData NOTIFY gridDataChanged)
 
 public:
     explicit TerrainOverlayGridManager(QObject* parent = nullptr);
     static TerrainOverlayGridManager* instance();
     static void registerQmlTypes();
 
-    QAbstractListModel* model() const { return _gridModel; }
+    // Exposed grid data: list of QVariantMap {latitude, longitude, altitude}
+    QList<QVariant> gridData() const;
 
 signals:
-    void modelChanged();
+    void gridDataChanged();
 
-private:
-    void _connectActiveVehicle();
+private slots:
+    void _requestTerrainAltitudes();
     void _activeVehicleChanged(Vehicle* vehicle);
     void _vehicleCoordinateChanged(const QGeoCoordinate& newCoord);
 
-    double _interpolatedTerrainAltitude(const QGeoCoordinate& coord) const;
-    bool _hasLineOfSight();
-    bool _hasLineOfSight(
-        const QGeoCoordinate& dronePos,
-        double droneAlt,
-        const QGeoCoordinate& targetPos,
-        double targetGroundAlt);
-
-    double _computeClearanceMargin(
-        const QGeoCoordinate& dronePos,
-        double droneAlt,
-        const QGeoCoordinate& targetPos,
-        double targetGroundAlt) const;
-    void _tryInitialGridSetup();
+private:
+    void _connectActiveVehicle();
     void _generateGridAroundHome(const QGeoCoordinate& center);
-
-    void _requestTerrainAltitudes();
-    void _buildInitialModel();
-    void _updateColorsForVehiclePosition(double vehicleAlt);
-
     bool _hasAllTerrainData() const;
     void _startRetryTimer();
     void _stopRetryTimer();
 
-    Vehicle* _activeVehicle = nullptr;
-
-    TerrainOverlayGridModel* _gridModel = nullptr;
     QList<QGeoCoordinate> _gridPoints;
     QList<double> _terrainAltitudes;
-
-    double _lastVehicleAltitude = 0.0;
-    QGeoCoordinate _homeCoord;
-
     QTimer _retryTimer;
-    bool _modelBuilt = false;
+
+    Vehicle* _activeVehicle = nullptr;
+    QGeoCoordinate _homeCoord;
+    bool _gridInitialized = false;
 };
