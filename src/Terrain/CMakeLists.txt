@@ -17,6 +17,8 @@ target_sources(${CMAKE_PROJECT_NAME}
         TerrainGridCell.h
         TerrainOverlayGridModel.cc
         TerrainOverlayGridModel.h
+        TerrainOverlayMapRenderer.cc
+        TerrainOverlayMapRenderer.h
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME}

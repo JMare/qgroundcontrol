@@ -70,6 +70,7 @@
 #include "VehicleComponent.h"
 #include "VideoManager.h"
 #include "TerrainOverlayGridManager.h"
+#include "TerrainOverlayMapRenderer.h"
 
 #ifndef QGC_DISABLE_MAVLINK_INSPECTOR
 #include "MAVLinkInspectorController.h"
@@ -353,6 +354,7 @@ void QGCApplication::_initForNormalAppBoot()
     VideoManager::instance()->init(mainRootWindow());
 
     TerrainOverlayGridManager::instance();
+    TerrainOverlayMapRenderer::instance();
 
     // Image provider for Optical Flow
     _qmlAppEngine->addImageProvider(_qgcImageProviderId, new QGCImageProvider());

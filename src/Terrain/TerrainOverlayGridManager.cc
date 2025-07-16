@@ -9,10 +9,10 @@
 #include "TerrainOverlayGridManager.h"
 #include "TerrainTileManager.h"
 #include "QGCApplication.h"
-#include "QGCLoggingCategory.h"
 #include "QGCCorePlugin.h"
 #include "MultiVehicleManager.h"
 #include "Vehicle.h"
+#include "QGCLoggingCategory.h"
 
 #include <QtMath>
 #include <QVariant>
@@ -45,7 +45,7 @@ TerrainOverlayGridManager::TerrainOverlayGridManager(QObject* parent)
     _retryTimer.setInterval(1000);
     connect(&_retryTimer, &QTimer::timeout, this, &TerrainOverlayGridManager::_requestTerrainAltitudes);
 
-    // Listen to MultiVehicleManager for active vehicle changes
+    // Connect to active vehicle management
     auto* manager = MultiVehicleManager::instance();
     connect(manager, &MultiVehicleManager::activeVehicleChanged,
             this, &TerrainOverlayGridManager::_activeVehicleChanged);
@@ -76,7 +76,7 @@ void TerrainOverlayGridManager::_activeVehicleChanged(Vehicle* vehicle)
 
     _activeVehicle = vehicle;
     _gridInitialized = false;
-    _homeCoord = QGeoCoordinate();
+    _center = QGeoCoordinate();
 
     if (_activeVehicle) {
         qCDebug(TerrainOverlayLog) << "[Overlay] Active vehicle changed. Subscribing.";
@@ -102,28 +102,26 @@ void TerrainOverlayGridManager::_vehicleCoordinateChanged(const QGeoCoordinate& 
     }
 
     qCDebug(TerrainOverlayLog) << "[Overlay] Got valid home coordinate:" << newCoord;
-    _homeCoord = newCoord;
+    _center = newCoord;
 
-    _generateGridAroundHome(_homeCoord);
+    _generateGrid(_center);
     _requestTerrainAltitudes();
     _startRetryTimer();
     _gridInitialized = true;
 }
 
-void TerrainOverlayGridManager::_generateGridAroundHome(const QGeoCoordinate& center)
+void TerrainOverlayGridManager::_generateGrid(const QGeoCoordinate& center)
 {
-    _gridPoints.clear();
-    _terrainAltitudes.clear();
+    _altitudes.clear();
 
-    constexpr double spacingMeters = 200.0;
-    constexpr double halfWidthMeters = 2000.0;
+    constexpr double halfWidthMeters = 500.0;
 
-    double approxLatSpacing = spacingMeters / 111320.0;
+    double approxLatSpacing = _spacingMeters / 111320.0;
     double approxLatHalf = halfWidthMeters / 111320.0;
 
     double centerLatRad = qDegreesToRadians(center.latitude());
     double metersPerDegLon = 111320.0 * std::cos(centerLatRad);
-    double approxLonSpacing = spacingMeters / metersPerDegLon;
+    double approxLonSpacing = _spacingMeters / metersPerDegLon;
     double approxLonHalf = halfWidthMeters / metersPerDegLon;
 
     double minLat = center.latitude() - approxLatHalf;
@@ -131,27 +129,43 @@ void TerrainOverlayGridManager::_generateGridAroundHome(const QGeoCoordinate& ce
     double minLon = center.longitude() - approxLonHalf;
     double maxLon = center.longitude() + approxLonHalf;
 
-    for (double lat = minLat; lat <= maxLat; lat += approxLatSpacing) {
-        for (double lon = minLon; lon <= maxLon; lon += approxLonSpacing) {
-            _gridPoints.append(QGeoCoordinate(lat, lon));
-            _terrainAltitudes.append(qQNaN());
-        }
-    }
+    _rows = int(((maxLat - minLat) / approxLatSpacing) + 1);
+    _cols = int(((maxLon - minLon) / approxLonSpacing) + 1);
 
-    qCDebug(TerrainOverlayLog) << "[Overlay] Generated" << _gridPoints.count() << "grid points.";
+    qCDebug(TerrainOverlayLog) << "[Overlay] Grid dimensions:" << _rows << "rows x" << _cols << "cols.";
+
+    // Fill altitudes with NaN
+    _altitudes.fill(qQNaN(), _rows * _cols);
 }
 
 void TerrainOverlayGridManager::_requestTerrainAltitudes()
 {
-    if (_gridPoints.isEmpty()) {
-        qCWarning(TerrainOverlayLog) << "[Overlay] No grid points for altitude request!";
+    if (_rows == 0 || _cols == 0) {
+        qCWarning(TerrainOverlayLog) << "[Overlay] Grid is empty. Skipping altitude request.";
         _stopRetryTimer();
         return;
     }
 
+    QList<QGeoCoordinate> requestPoints;
+    double approxLatSpacing = _spacingMeters / 111320.0;
+    double centerLatRad = qDegreesToRadians(_center.latitude());
+    double metersPerDegLon = 111320.0 * std::cos(centerLatRad);
+    double approxLonSpacing = _spacingMeters / metersPerDegLon;
+
+    int centerRow = _rows / 2;
+    int centerCol = _cols / 2;
+
+    for (int row = 0; row < _rows; ++row) {
+        double lat = _center.latitude() + (row - centerRow) * approxLatSpacing;
+        for (int col = 0; col < _cols; ++col) {
+            double lon = _center.longitude() + (col - centerCol) * approxLonSpacing;
+            requestPoints.append(QGeoCoordinate(lat, lon));
+        }
+    }
+
     bool error = false;
     QList<double> newAltitudes;
-    bool haveAllData = TerrainTileManager::instance()->getAltitudesForCoordinates(_gridPoints, newAltitudes, error);
+    bool haveAllData = TerrainTileManager::instance()->getAltitudesForCoordinates(requestPoints, newAltitudes, error);
 
     if (error) {
         qCWarning(TerrainOverlayLog) << "[Overlay] Error requesting altitudes! Will retry.";
@@ -159,10 +173,10 @@ void TerrainOverlayGridManager::_requestTerrainAltitudes()
     }
 
     bool updated = false;
-    int count = qMin(_gridPoints.count(), newAltitudes.count());
+    int count = qMin(_altitudes.size(), newAltitudes.size());
     for (int i = 0; i < count; ++i) {
-        if (!std::isnan(newAltitudes[i]) && std::isnan(_terrainAltitudes[i])) {
-            _terrainAltitudes[i] = newAltitudes[i];
+        if (!std::isnan(newAltitudes[i]) && std::isnan(_altitudes[i])) {
+            _altitudes[i] = newAltitudes[i];
             updated = true;
         }
     }
@@ -170,26 +184,32 @@ void TerrainOverlayGridManager::_requestTerrainAltitudes()
     if (_hasAllTerrainData()) {
         qCDebug(TerrainOverlayLog) << "[Overlay] All terrain altitudes fetched.";
         _stopRetryTimer();
-        emit gridDataChanged();
+        emit gridChanged();
     } else if (updated) {
-            int fetchedCount = 0;
-            for (double alt : _terrainAltitudes) {
-                if (!std::isnan(alt)) {
-                    fetchedCount++;
-                }
-            }
-            qCDebug(TerrainOverlayLog) << "[Overlay] Partial altitudes updated:"
-                                        << fetchedCount << "/" << _terrainAltitudes.size()
-                                        << "points complete. Still retrying.";
+        int fetched = _countFetchedAltitudes();
+        qCDebug(TerrainOverlayLog) << "[Overlay] Partial altitudes updated:"
+                                   << fetched << "/" << _altitudes.size()
+                                   << "points complete. Still retrying.";
     }
 }
 
 bool TerrainOverlayGridManager::_hasAllTerrainData() const
 {
-    for (double alt : _terrainAltitudes) {
+    for (double alt : _altitudes) {
         if (std::isnan(alt)) return false;
     }
     return true;
+}
+
+int TerrainOverlayGridManager::_countFetchedAltitudes() const
+{
+    int count = 0;
+    for (double alt : _altitudes) {
+        if (!std::isnan(alt)) {
+            count++;
+        }
+    }
+    return count;
 }
 
 void TerrainOverlayGridManager::_startRetryTimer()
@@ -208,16 +228,20 @@ void TerrainOverlayGridManager::_stopRetryTimer()
     }
 }
 
-QList<QVariant> TerrainOverlayGridManager::gridData() const
+QVariant TerrainOverlayGridManager::grid() const
 {
-    QList<QVariant> data;
-    int count = qMin(_gridPoints.count(), _terrainAltitudes.count());
-    for (int i = 0; i < count; ++i) {
-        QVariantMap entry;
-        entry["latitude"] = _gridPoints[i].latitude();
-        entry["longitude"] = _gridPoints[i].longitude();
-        entry["altitude"] = _terrainAltitudes[i];
-        data.append(entry);
+    QVariantMap result;
+    result["centerLat"] = _center.latitude();
+    result["centerLon"] = _center.longitude();
+    result["spacingMeters"] = _spacingMeters;
+    result["rows"] = _rows;
+    result["cols"] = _cols;
+
+    QVariantList altitudeList;
+    for (double alt : _altitudes) {
+        altitudeList.append(alt);
     }
-    return data;
+    result["altitudes"] = altitudeList;
+
+    return result;
 }

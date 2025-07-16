@@ -8,30 +8,37 @@
 
 #pragma once
 
+#include <qloggingcategory.h>
 #include <QObject>
 #include <QGeoCoordinate>
 #include <QTimer>
 #include <QLoggingCategory>
 
-Q_DECLARE_LOGGING_CATEGORY(TerrainOverlayLog)
+Q_DECLARE_LOGGING_CATEGORY(TerrainOverlayLog);
 
 class Vehicle;
 
 class TerrainOverlayGridManager : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(QList<QVariant> gridData READ gridData NOTIFY gridDataChanged)
+    Q_PROPERTY(QVariant grid READ grid NOTIFY gridChanged)
 
 public:
     explicit TerrainOverlayGridManager(QObject* parent = nullptr);
     static TerrainOverlayGridManager* instance();
     static void registerQmlTypes();
 
-    // Exposed grid data: list of QVariantMap {latitude, longitude, altitude}
-    QList<QVariant> gridData() const;
+    // Returns a QVariantMap containing:
+    // - centerLat
+    // - centerLon
+    // - spacingMeters
+    // - rows
+    // - cols
+    // - altitudes (flattened list)
+    QVariant grid() const;
 
 signals:
-    void gridDataChanged();
+    void gridChanged();
 
 private slots:
     void _requestTerrainAltitudes();
@@ -40,16 +47,20 @@ private slots:
 
 private:
     void _connectActiveVehicle();
-    void _generateGridAroundHome(const QGeoCoordinate& center);
+    void _generateGrid(const QGeoCoordinate& center);
     bool _hasAllTerrainData() const;
     void _startRetryTimer();
     void _stopRetryTimer();
+    int _countFetchedAltitudes() const;
 
-    QList<QGeoCoordinate> _gridPoints;
-    QList<double> _terrainAltitudes;
+    // Grid definition
+    QGeoCoordinate _center;
+    double _spacingMeters = 50.0;
+    int _rows = 0;
+    int _cols = 0;
+    QVector<double> _altitudes;
+
     QTimer _retryTimer;
-
     Vehicle* _activeVehicle = nullptr;
-    QGeoCoordinate _homeCoord;
     bool _gridInitialized = false;
 };
