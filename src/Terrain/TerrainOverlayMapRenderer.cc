@@ -65,6 +65,16 @@ void TerrainOverlayMapRenderer::_onGridChanged()
     qCDebug(TerrainOverlayMapLog) << "[MapRenderer] Received new grid.";
 
     _computeBounds(grid);
+
+    // NEW: Store altitude grid
+    _altitudeGrid = grid.value("altitudes").toList();
+
+    _gridRows = grid.value("rows").toInt();
+    _gridCols = grid.value("cols").toInt();
+
+    _altitudeGrid = grid.value("altitudes").toList();
+    emit gridDataChanged();
+
     _generateHeatmapImage(grid);
 }
 

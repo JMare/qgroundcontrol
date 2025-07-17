@@ -24,8 +24,16 @@ class TerrainOverlayMapRenderer : public QObject
     Q_PROPERTY(double maxLon READ maxLon NOTIFY boundsChanged)
     Q_PROPERTY(double overlayNativeZoomLevel READ overlayNativeZoomLevel NOTIFY boundsChanged)
     Q_PROPERTY(int lastUpdateCounter READ lastUpdateCounter NOTIFY heatmapImageChanged)
+    Q_PROPERTY(QVariantList altitudeGrid READ altitudeGrid NOTIFY gridDataChanged)  // NEW
+    Q_PROPERTY(int gridRows READ gridRows NOTIFY gridDataChanged)
+    Q_PROPERTY(int gridCols READ gridCols NOTIFY gridDataChanged)
 
 public:
+    int _gridRows = 0;
+    int _gridCols = 0;
+
+    int gridRows() const { return _gridRows; }
+    int gridCols() const { return _gridCols; }
     static TerrainOverlayMapRenderer* instance();
     static void registerQmlTypes();
 
@@ -36,21 +44,22 @@ public:
     double maxLat() const { return _maxLat; }
     double maxLon() const { return _maxLon; }
     double overlayNativeZoomLevel() const { return _overlayNativeZoomLevel; }
-
     int lastUpdateCounter() const { return _updateCounter; }
+    QVariantList altitudeGrid() const { return _altitudeGrid; }  // NEW
 
     void setImageProvider(HeatmapImageProvider* provider);
 
 signals:
     void boundsChanged();
     void heatmapImageChanged();
+    void gridDataChanged();  // NEW
 
 private:
     void _connectToManager();
     void _onGridChanged();
     void _computeBounds(const QVariantMap& grid);
     void _generateHeatmapImage(const QVariantMap& grid);
-    void _computeOverlayNativeZoomLevel(int imageWidth, int imageHeight);   // <-- Make sure this is declared!
+    void _computeOverlayNativeZoomLevel(int imageWidth, int imageHeight);
 
     HeatmapImageProvider* _imageProvider = nullptr;
 
@@ -61,4 +70,6 @@ private:
     double _overlayNativeZoomLevel = 0.0;
 
     int _updateCounter = 0;
+
+    QVariantList _altitudeGrid;  // NEW
 };
