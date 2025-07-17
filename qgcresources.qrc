@@ -115,4 +115,8 @@
         <file alias="gcscontrol_gcs.svg">resources/gcscontrolIndicator/gcscontrol_gcs.svg</file>
         <file alias="gcscontrol_line.svg">resources/gcscontrolIndicator/gcscontrol_line.svg</file>
     </qresource>
+    <qresource prefix="/shaders">
+    <file alias="AltitudeColor.frag.qsb">src/FlightDisplay/AltitudeColor.frag.qsb</file>
+    <file alias="AltitudeColor.vert.qsb">src/FlightDisplay/AltitudeColor.vert.qsb</file>
+    </qresource>
 </RCC>

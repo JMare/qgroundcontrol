@@ -363,6 +363,75 @@ MapQuickItem {
     }
 }
 
+// Test GPU overlay using altitudeGrid
+Item {
+    id: shaderTestOverlay
+    anchors.fill: parent
+    visible: terrainOverlayMapRenderer.lastUpdateCounter > 0
+
+    // Create altitude map as an image
+    Canvas {
+        id: altitudeCanvas
+        width: terrainOverlayMapRenderer.gridCols
+        height: terrainOverlayMapRenderer.gridRows
+        visible: false
+
+        onPaint: {
+            var ctx = getContext("2d")
+            ctx.clearRect(0, 0, width, height)
+
+            var altitudes = terrainOverlayMapRenderer.altitudeGrid
+            var minAlt = 100000
+            var maxAlt = -100000
+            for (var i = 0; i < altitudes.length; i++) {
+                var val = altitudes[i]
+                if (!isNaN(val)) {
+                    if (val < minAlt) minAlt = val
+                    if (val > maxAlt) maxAlt = val
+                }
+            }
+
+            var range = maxAlt - minAlt
+            if (range <= 0) range = 1
+
+            for (var row = 0; row < height; row++) {
+                for (var col = 0; col < width; col++) {
+                    var i = row * width + col
+                    var val = altitudes[i]
+                    if (isNaN(val)) val = minAlt
+                    var norm = (val - minAlt) / range
+                    norm = Math.max(0, Math.min(1, norm))
+                    var gray = Math.round(norm * 255)
+                    ctx.fillStyle = "rgb(" + gray + "," + gray + "," + gray + ")"
+                    ctx.fillRect(col, row, 1, 1)
+                }
+            }
+        }
+
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
+        onVisibleChanged: requestPaint()
+        Connections {
+            target: terrainOverlayMapRenderer
+            onGridDataChanged: altitudeCanvas.requestPaint()
+        }
+    }
+
+    ShaderEffect {
+        anchors.fill: parent
+        property real minLat: terrainOverlayMapRenderer.minLat
+        property real maxLat: terrainOverlayMapRenderer.maxLat
+        property real minLon: terrainOverlayMapRenderer.minLon
+        property real maxLon: terrainOverlayMapRenderer.maxLon
+
+        property real overlayZoom: terrainOverlayMapRenderer.overlayNativeZoomLevel
+
+        property var altitudeTexture: altitudeCanvas
+
+        vertexShader: "qrc:/shaders/AltitudeColor.vert.qsb"
+        fragmentShader: "qrc:/shaders/AltitudeColor.frag.qsb"
+    }
+}
     // Allow custom builds to add map items
     CustomMapItems {
         map:            _root
