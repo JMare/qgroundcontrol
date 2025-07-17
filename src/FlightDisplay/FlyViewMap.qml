@@ -24,6 +24,7 @@ import QGroundControl.ScreenTools
 import QGroundControl.Vehicle
 import QGroundControl.TerrainOverlayGridManager
 import QGroundControl.TerrainOverlayMapRenderer
+import QGroundControl.Terrain
 
 FlightMap {
     id:                         _root
@@ -331,107 +332,12 @@ FlightMap {
 // --------------------
 // DEMO: Altitude-colored tile overlay
 // --------------------
-MapQuickItem {
-    id: terrainOverlay
-    z: QGroundControl.zOrderMapItems
 
-    // Anchor the image's top-left corner at (maxLat, minLon)
-    coordinate: QtPositioning.coordinate(terrainOverlayMapRenderer.maxLat, terrainOverlayMapRenderer.minLon)
-    anchorPoint.x: 0
-    anchorPoint.y: 0
-
-    zoomLevel: terrainOverlayMapRenderer.overlayNativeZoomLevel
-
-    visible: terrainOverlayMapRenderer.lastUpdateCounter > 0
-
-    // The heatmap itself
-    sourceItem: Image {
-        id: heatmapImage
-        source: "image://terrainoverlay/heatmap?" + terrainOverlayMapRenderer.lastUpdateCounter
-        opacity: 0.5
-        fillMode: Image.Stretch
-
-        onSourceChanged: console.log("[Overlay Image] source changed to", source)
-        onWidthChanged: {
-        console.log("[Overlay Image] Width:", width)
-        console.log("Altitude grid shape:", terrainOverlayMapRenderer.gridRows, "x", terrainOverlayMapRenderer.gridCols)
-        }
-        onHeightChanged: console.log("[Overlay Image] Height:", height)
-        Component.onCompleted: {
-            console.log("Altitude Grid:", terrainOverlayMapRenderer.altitudeGrid)
-        }
-    }
-}
-
-// Test GPU overlay using altitudeGrid
-Item {
-    id: shaderTestOverlay
+AltitudeGridOverlay {
     anchors.fill: parent
-    visible: terrainOverlayMapRenderer.lastUpdateCounter > 0
-
-    // Create altitude map as an image
-    Canvas {
-        id: altitudeCanvas
-        width: terrainOverlayMapRenderer.gridCols
-        height: terrainOverlayMapRenderer.gridRows
-        visible: false
-
-        onPaint: {
-            var ctx = getContext("2d")
-            ctx.clearRect(0, 0, width, height)
-
-            var altitudes = terrainOverlayMapRenderer.altitudeGrid
-            var minAlt = 100000
-            var maxAlt = -100000
-            for (var i = 0; i < altitudes.length; i++) {
-                var val = altitudes[i]
-                if (!isNaN(val)) {
-                    if (val < minAlt) minAlt = val
-                    if (val > maxAlt) maxAlt = val
-                }
-            }
-
-            var range = maxAlt - minAlt
-            if (range <= 0) range = 1
-
-            for (var row = 0; row < height; row++) {
-                for (var col = 0; col < width; col++) {
-                    var i = row * width + col
-                    var val = altitudes[i]
-                    if (isNaN(val)) val = minAlt
-                    var norm = (val - minAlt) / range
-                    norm = Math.max(0, Math.min(1, norm))
-                    var gray = Math.round(norm * 255)
-                    ctx.fillStyle = "rgb(" + gray + "," + gray + "," + gray + ")"
-                    ctx.fillRect(col, row, 1, 1)
-                }
-            }
-        }
-
-        onWidthChanged: requestPaint()
-        onHeightChanged: requestPaint()
-        onVisibleChanged: requestPaint()
-        Connections {
-            target: terrainOverlayMapRenderer
-            onGridDataChanged: altitudeCanvas.requestPaint()
-        }
-    }
-
-    ShaderEffect {
-        anchors.fill: parent
-        property real minLat: terrainOverlayMapRenderer.minLat
-        property real maxLat: terrainOverlayMapRenderer.maxLat
-        property real minLon: terrainOverlayMapRenderer.minLon
-        property real maxLon: terrainOverlayMapRenderer.maxLon
-
-        property real overlayZoom: terrainOverlayMapRenderer.overlayNativeZoomLevel
-
-        property var altitudeTexture: altitudeCanvas
-
-        vertexShader: "qrc:/shaders/AltitudeColor.vert.qsb"
-        fragmentShader: "qrc:/shaders/AltitudeColor.frag.qsb"
-    }
+    terrainOverlayRenderer: terrainOverlayMapRenderer
 }
+
     // Allow custom builds to add map items
     CustomMapItems {
         map:            _root
