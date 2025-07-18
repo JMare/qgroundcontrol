@@ -1,3 +1,5 @@
+find_package(Qt6 REQUIRED COMPONENTS Core Qml ShaderTools)
+
 qt_add_library(TerrainModule STATIC)
 
 qt_add_qml_module(TerrainModule
@@ -6,6 +8,14 @@ qt_add_qml_module(TerrainModule
     RESOURCE_PREFIX /qml
     QML_FILES
         AltitudeGridOverlay.qml
+)
+
+qt6_add_shaders(TerrainModule "terrain_shaders"
+    PREFIX
+        "/shaders"
+    FILES
+        AltitudeColor.vert
+        AltitudeColor.frag
 )
 
 target_sources(${CMAKE_PROJECT_NAME}

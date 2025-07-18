@@ -104,6 +104,15 @@ MapQuickItem {
             ShaderEffect {
                 anchors.fill: parent
 
+                property real gridCols: terrainOverlayRenderer.gridCols
+                property real gridRows: terrainOverlayRenderer.gridRows
+
+                property var activeVehicleCoordinate: _activeVehicle ? _activeVehicle.coordinate : QtPositioning.coordinate()
+                property real droneLat: activeVehicleCoordinate.latitude
+                property real droneLon: activeVehicleCoordinate.longitude
+                onActiveVehicleCoordinateChanged: {
+                    console.log(`📍 Active Vehicle Coordinate changed: lat=${_activeVehicleCoordinate.latitude.toFixed(6)}, lon=${_activeVehicleCoordinate.longitude.toFixed(6)}, alt=${_activeVehicleCoordinate.altitude.toFixed(2)}`)
+                }
                 property real minLat: terrainOverlayRenderer.minLat
                 property real maxLat: terrainOverlayRenderer.maxLat
                 property real minLon: terrainOverlayRenderer.minLon
@@ -111,6 +120,25 @@ MapQuickItem {
                 property real overlayZoom: terrainOverlayRenderer.overlayNativeZoomLevel
                 property var altitudeTexture: altitudeCanvas
 
+                property real droneX: {
+                    // Normalize longitude to grid width
+                    const lonSpan = maxLon - minLon
+                    if (lonSpan === 0) return 0
+                    return (droneLon - minLon) / lonSpan * gridCols
+                }
+
+                property real droneY: {
+                    // Normalize latitude (note: Y axis usually goes *down*, so reverse)
+                    const latSpan = maxLat - minLat
+                    if (latSpan === 0) return 0
+                    return (maxLat - droneLat) / latSpan * gridRows
+                }
+                    onDroneXChanged: {
+                        console.log("📍 Drone pixel X:", droneX.toFixed(2))
+                    }
+                    onDroneYChanged: {
+                        console.log("📍 Drone pixel Y:", droneY.toFixed(2))
+                    }
                 property real droneAlt: QGroundControl.multiVehicleManager.activeVehicle ?
                         QGroundControl.multiVehicleManager.activeVehicle.altitudeAMSL.value : 250.0
 
