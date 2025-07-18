@@ -34,6 +34,7 @@ MapQuickItem {
             id: altitudeCanvas
             width: terrainOverlayRenderer.gridCols
             height: terrainOverlayRenderer.gridRows
+            renderTarget: Canvas.FramebufferObject
             visible: false
 
             onPaint: {
@@ -73,7 +74,11 @@ MapQuickItem {
 
             Connections {
                 target: terrainOverlayRenderer
-                onGridDataChanged: altitudeCanvas.requestPaint()
+                onGridDataChanged:
+                {
+                    altitudeCanvas.requestPaint()
+                    console.log("Canvas texture:", altitudeCanvas.canvasTexture);
+                }
             }
         }
 
@@ -101,7 +106,7 @@ MapQuickItem {
                 property real minLon: terrainOverlayRenderer.minLon
                 property real maxLon: terrainOverlayRenderer.maxLon
                 property real overlayZoom: terrainOverlayRenderer.overlayNativeZoomLevel
-                property var altitudeTexture: altitudeCanvas.canvasTexture
+                property var altitudeTexture: altitudeCanvas
 
                 vertexShader: "qrc:/shaders/AltitudeColor.vert.qsb"
                 fragmentShader: "qrc:/shaders/AltitudeColor.frag.qsb"
