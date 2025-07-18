@@ -16,55 +16,57 @@ layout(std140, binding = 0) uniform buf {
 layout(binding = 1) uniform sampler2D altitudeTexture;
 
 void main() {
-    // Convert texture coordinates to grid coordinates
+    // Convert fragment position to grid coordinates
     float fragX = vTexCoord.x * float(gridCols);
     float fragY = vTexCoord.y * float(gridRows);
 
-    // Vector from drone to current pixel
+    // Distance from drone
     float dx = fragX - droneX;
     float dy = fragY - droneY;
     float distance = sqrt(dx * dx + dy * dy);
 
-    // Small threshold for early exit (avoid self-intersection)
+    // 🟢 If we're at the drone location, it's visible
     if (distance < 1.0) {
-        fragColor = vec4(0.0, 1.0, 0.0, qt_Opacity); // Green if we're at the drone location
+        fragColor = vec4(0.0, 1.0, 0.0, qt_Opacity);
         return;
     }
 
-    // Normalize direction
+    // Normalize direction vector
     float stepCount = distance;
     float stepX = dx / stepCount;
     float stepY = dy / stepCount;
 
-    // Start at drone
     float sampleX = droneX;
     float sampleY = droneY;
-    float clear = 1.0;
+    float maxElevation = -9999.0;
 
-    // Ray trace along the path
-    for (int i = 0; i < int(stepCount); ++i) {
+    for (int i = 1; i < int(stepCount); ++i) {
         sampleX += stepX;
         sampleY += stepY;
 
-        // Clamp to avoid sampling out of bounds
+        // Clamp sample to grid bounds
         int px = int(clamp(floor(sampleX), 0.0, float(gridCols - 1)));
         int py = int(clamp(floor(sampleY), 0.0, float(gridRows - 1)));
 
-        vec2 texCoord = vec2(float(px) + 0.5, float(py) + 0.5) / vec2(float(gridCols), float(gridRows));
+        vec2 texCoord = (vec2(px, py) + 0.5) / vec2(gridCols, gridRows);
         float gray = texture(altitudeTexture, texCoord).r;
-
         float terrainAlt = 200.0 + gray * 255.0;
 
-        // Linearly interpolate height along LOS
-        float t = float(i) / stepCount;
-        float rayHeight = mix(droneAlt, droneAlt, t); // Flat for now, modify if needed
+        float distToSample = length(vec2(sampleX - droneX, sampleY - droneY));
+        float elevationAngle = (terrainAlt - droneAlt) / distToSample;
 
-        if (terrainAlt > rayHeight) {
-            clear = 0.0; // Obstructed
-            break;
-        }
+        if (elevationAngle > maxElevation)
+            maxElevation = elevationAngle;
     }
 
-    // Color based on visibility
-    fragColor = clear > 0.5 ? vec4(0.0, 1.0, 0.0, qt_Opacity) : vec4(1.0, 0.0, 0.0, qt_Opacity);
+    // Final pixel altitude and angle
+    float currentGray = texture(altitudeTexture, vTexCoord).r;
+    float currentAlt = 200.0 + currentGray * 255.0;
+    float pixelAngle = (currentAlt - droneAlt) / distance;
+
+    if (pixelAngle >= maxElevation) {
+        fragColor = vec4(0.0, 1.0, 0.0, qt_Opacity); // 🟢 Visible
+    } else {
+        fragColor = vec4(1.0, 0.0, 0.0, qt_Opacity); // 🔴 Blocked
+    }
 }

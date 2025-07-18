@@ -94,13 +94,6 @@ MapQuickItem {
             border.width: 0
             visible: true
 
-            Text {
-                anchors.top: parent.top
-                anchors.left: parent.left
-                text: `W: ${parent.width}, H: ${parent.height}`
-                color: "white"
-                font.pixelSize: 14
-            }
             ShaderEffect {
                 anchors.fill: parent
                 opacity: 0.005
