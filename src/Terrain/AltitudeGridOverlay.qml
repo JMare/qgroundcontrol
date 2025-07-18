@@ -91,7 +91,7 @@ MapQuickItem {
             height: terrainOverlayRenderer.gridRows
             color: "transparent"
             border.color: "white"
-            border.width: 1
+            border.width: 0
             visible: true
 
             Text {
@@ -103,7 +103,7 @@ MapQuickItem {
             }
             ShaderEffect {
                 anchors.fill: parent
-
+                opacity: 0.005
                 property real gridCols: terrainOverlayRenderer.gridCols
                 property real gridRows: terrainOverlayRenderer.gridRows
 
