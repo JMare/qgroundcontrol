@@ -16,57 +16,66 @@ layout(std140, binding = 0) uniform buf {
 layout(binding = 1) uniform sampler2D altitudeTexture;
 
 void main() {
-    // Convert fragment position to grid coordinates
-    float fragX = vTexCoord.x * float(gridCols);
-    float fragY = vTexCoord.y * float(gridRows);
+    // 📌 SNAP fragment to center of its grid cell (avoids subpixel aliasing)
+    int col = int(floor(vTexCoord.x * float(gridCols)));
+    int row = int(floor(vTexCoord.y * float(gridRows)));
 
-    // Distance from drone
+    vec2 snappedTexCoord = (vec2(col, row) + 0.5) / vec2(gridCols, gridRows);
+    float fragX = float(col);
+    float fragY = float(row);
+
+    // ⛓️ Vector from drone to this point
     float dx = fragX - droneX;
     float dy = fragY - droneY;
     float distance = sqrt(dx * dx + dy * dy);
 
-    // 🟢 If we're at the drone location, it's visible
-    if (distance < 1.0) {
-        fragColor = vec4(0.0, 1.0, 0.0, qt_Opacity);
+    if (distance < 0.5) {
+        fragColor = vec4(0.0, 0.0, 1.0, 1.0); // 🔵 Drone pixel
         return;
     }
 
-    // Normalize direction vector
-    float stepCount = distance;
-    float stepX = dx / stepCount;
-    float stepY = dy / stepCount;
+    // ⚡ Raytrace setup
+    float steps = distance;
+    float stepX = dx / steps;
+    float stepY = dy / steps;
 
+    float maxSlope = -99999.0;
     float sampleX = droneX;
     float sampleY = droneY;
-    float maxElevation = -9999.0;
+    float obstruction = 0.0;
 
-    for (int i = 1; i < int(stepCount); ++i) {
+    for (int i = 1; i < int(steps); ++i) {
         sampleX += stepX;
         sampleY += stepY;
 
-        // Clamp sample to grid bounds
-        int px = int(clamp(floor(sampleX), 0.0, float(gridCols - 1)));
-        int py = int(clamp(floor(sampleY), 0.0, float(gridRows - 1)));
+        int sx = int(clamp(floor(sampleX), 0.0, float(gridCols - 1)));
+        int sy = int(clamp(floor(sampleY), 0.0, float(gridRows - 1)));
 
-        vec2 texCoord = (vec2(px, py) + 0.5) / vec2(gridCols, gridRows);
+        vec2 texCoord = (vec2(sx, sy) + 0.5) / vec2(gridCols, gridRows);
         float gray = texture(altitudeTexture, texCoord).r;
         float terrainAlt = 200.0 + gray * 255.0;
 
-        float distToSample = length(vec2(sampleX - droneX, sampleY - droneY));
-        float elevationAngle = (terrainAlt - droneAlt) / distToSample;
+        float dist = length(vec2(sampleX - droneX, sampleY - droneY));
+        float slope = (terrainAlt - droneAlt) / dist;
 
-        if (elevationAngle > maxElevation)
-            maxElevation = elevationAngle;
+        if (slope > maxSlope) {
+            maxSlope = slope;
+        }
     }
 
-    // Final pixel altitude and angle
-    float currentGray = texture(altitudeTexture, vTexCoord).r;
-    float currentAlt = 200.0 + currentGray * 255.0;
-    float pixelAngle = (currentAlt - droneAlt) / distance;
+    // 🎯 Final pixel terrain altitude
+    float finalGray = texture(altitudeTexture, snappedTexCoord).r;
+    float finalAlt = 200.0 + finalGray * 255.0;
+    float finalSlope = (finalAlt - droneAlt) / distance;
 
-    if (pixelAngle >= maxElevation) {
+    float diff = finalSlope - maxSlope;
+
+    if (diff >= 0.01) {
         fragColor = vec4(0.0, 1.0, 0.0, qt_Opacity); // 🟢 Visible
+    } else if (diff >= -0.02) {
+        fragColor = vec4(1.0, 0.5, 0.0, qt_Opacity); // 🟠 Near blocked
     } else {
-        fragColor = vec4(1.0, 0.0, 0.0, qt_Opacity); // 🔴 Blocked
+        float strength = clamp(-diff * 10.0, 0.0, 1.0); // redder = more obstructed
+        fragColor = vec4(strength, 0.0, 0.0, qt_Opacity); // 🟥 Obstructed gradient
     }
 }
