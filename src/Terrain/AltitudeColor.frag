@@ -16,23 +16,36 @@ layout(std140, binding = 0) uniform buf {
 layout(binding = 1) uniform sampler2D altitudeTexture;
 
 void main() {
-    /*float gray = texture(altitudeTexture, vTexCoord).r;
-                                                                float terrainAlt = 200.0 + gray * 255.0;
+    float targetX = vTexCoord.x * float(gridCols);
+    float targetY = vTexCoord.y * float(gridRows);
 
-                                                                if (terrainAlt > droneAlt) {
-                                                                    fragColor = vec4(1.0, 0.0, 0.0, 1.0); // 🔴 Above
-                                                                } else {
-                                                                    fragColor = vec4(0.0, 1.0, 0.0, 1.0); // 🟢 Below
-                                                                }
+    float dx = targetX - droneX;
+    float dy = targetY - droneY;
 
-                                                                fragColor *= qt_Opacity;*/
-    float fragX = vTexCoord.x * gridCols;
+    const int steps = 50;
+    bool blocked = false;
 
-    if (fragX < droneX) {
-        fragColor = vec4(1.0, 0.0, 0.0, 1.0); // 🔴 Left of drone
-    } else {
-        fragColor = vec4(0.0, 1.0, 0.0, 1.0); // 🟢 Right of drone
+    float targetGray = texture(altitudeTexture, vec2(targetX / float(gridCols), targetY / float(gridRows))).r;
+    float targetAlt = 200.0 + targetGray * 255.0;
+
+    for (int i = 1; i < steps; ++i) {
+        float t = float(i) / float(steps);
+
+        float sampleX = droneX + dx * t;
+        float sampleY = droneY + dy * t;
+
+        vec2 sampleCoord = vec2(sampleX / float(gridCols), sampleY / float(gridRows));
+        float gray = texture(altitudeTexture, sampleCoord).r;
+        float terrainAlt = 200.0 + gray * 255.0;
+
+        float expectedAlt = mix(droneAlt, targetAlt, t); // LOS slope
+
+        if (terrainAlt > expectedAlt) {
+            blocked = true;
+            break;
+        }
     }
 
+    fragColor = blocked ? vec4(1.0, 0.0, 0.0, 1.0) : vec4(0.0, 1.0, 0.0, 1.0);
     fragColor *= qt_Opacity;
 }
