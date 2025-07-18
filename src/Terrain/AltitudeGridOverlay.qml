@@ -42,25 +42,28 @@ MapQuickItem {
                 ctx.clearRect(0, 0, width, height);
 
                 const altitudes = terrainOverlayRenderer.altitudeGrid;
-                let minAlt = Infinity;
-                let maxAlt = -Infinity;
 
-                for (let i = 0; i < altitudes.length; i++) {
-                    const val = altitudes[i];
-                    if (!isNaN(val)) {
-                        minAlt = Math.min(minAlt, val);
-                        maxAlt = Math.max(maxAlt, val);
-                    }
-                }
-
-                const range = maxAlt - minAlt || 1;
+                // 🔢 Fixed encoding range
+                const floorAlt = 200.0;
+                const ceilingAlt = 455.0;
+                const range = ceilingAlt - floorAlt;
 
                 for (let row = 0; row < height; row++) {
                     for (let col = 0; col < width; col++) {
                         const i = row * width + col;
                         let val = altitudes[i];
-                        if (isNaN(val)) val = minAlt;
-                        const norm = Math.max(0, Math.min(1, (val - minAlt) / range));
+
+                        if (isNaN(val)) {
+                            val = floorAlt;
+                        }
+
+                        // ⛓️ Clamp to [floor, ceiling]
+                        val = Math.max(floorAlt, Math.min(ceilingAlt, val));
+
+                        // 📉 Normalize to 0–1
+                        const norm = (val - floorAlt) / range;
+
+                        // 🎨 Encode as grayscale
                         const gray = Math.round(norm * 255);
                         ctx.fillStyle = `rgb(${gray},${gray},${gray})`;
                         ctx.fillRect(col, row, 1, 1);
