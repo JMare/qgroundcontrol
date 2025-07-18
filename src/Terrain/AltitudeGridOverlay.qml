@@ -111,6 +111,9 @@ MapQuickItem {
                 property real overlayZoom: terrainOverlayRenderer.overlayNativeZoomLevel
                 property var altitudeTexture: altitudeCanvas
 
+                property real droneAlt: QGroundControl.multiVehicleManager.activeVehicle ?
+                        QGroundControl.multiVehicleManager.activeVehicle.altitudeAMSL.value : 250.0
+
                 vertexShader: "qrc:/shaders/AltitudeColor.vert.qsb"
                 fragmentShader: "qrc:/shaders/AltitudeColor.frag.qsb"
                 Component.onCompleted: {
