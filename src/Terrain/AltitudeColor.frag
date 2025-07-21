@@ -6,7 +6,7 @@ layout(location = 0) out vec4 fragColor;
 layout(std140, binding = 0) uniform buf {
     mat4 qt_Matrix;
     float qt_Opacity;
-    float droneAlt; // ✅ Moved inside the block
+    float droneAlt;
     float droneX;
     float droneY;
     float gridCols;
@@ -16,43 +16,42 @@ layout(std140, binding = 0) uniform buf {
 layout(binding = 1) uniform sampler2D altitudeTexture;
 
 void main() {
-    // 📌 SNAP fragment to center of its grid cell (avoids subpixel aliasing)
-    int col = int(floor(vTexCoord.x * float(gridCols)));
-    int row = int(floor(vTexCoord.y * float(gridRows)));
+    // 🔲 Snap fragment to grid pixel center
+    int col = int(floor(vTexCoord.x * gridCols));
+    int row = int(floor(vTexCoord.y * gridRows));
 
     vec2 snappedTexCoord = (vec2(col, row) + 0.5) / vec2(gridCols, gridRows);
     float fragX = float(col);
     float fragY = float(row);
 
-    // ⛓️ Vector from drone to this point
+    // 📏 Vector from drone to pixel
     float dx = fragX - droneX;
     float dy = fragY - droneY;
     float distance = sqrt(dx * dx + dy * dy);
 
     if (distance < 0.5) {
-        fragColor = vec4(0.0, 0.0, 1.0, 1.0); // 🔵 Drone pixel
+        fragColor = vec4(0.0, 0.0, 1.0, 1.0); // 🔵 Drone location
         return;
     }
 
-    // ⚡ Raytrace setup
-    float steps = distance;
-    float stepX = dx / steps;
-    float stepY = dy / steps;
+    float stepCount = distance;
+    float stepX = dx / stepCount;
+    float stepY = dy / stepCount;
 
-    float maxSlope = -99999.0;
+    float maxSlope = -1e9;
     float sampleX = droneX;
     float sampleY = droneY;
-    float obstruction = 0.0;
 
-    for (int i = 1; i < int(steps); ++i) {
+    // 🔁 Walk along the ray
+    for (int i = 1; i < int(stepCount); ++i) {
         sampleX += stepX;
         sampleY += stepY;
 
-        int sx = int(clamp(floor(sampleX), 0.0, float(gridCols - 1)));
-        int sy = int(clamp(floor(sampleY), 0.0, float(gridRows - 1)));
+        int sx = int(clamp(floor(sampleX), 0.0, gridCols - 1.0));
+        int sy = int(clamp(floor(sampleY), 0.0, gridRows - 1.0));
 
-        vec2 texCoord = (vec2(sx, sy) + 0.5) / vec2(gridCols, gridRows);
-        float gray = texture(altitudeTexture, texCoord).r;
+        vec2 sampleCoord = (vec2(sx, sy) + 0.5) / vec2(gridCols, gridRows);
+        float gray = texture(altitudeTexture, sampleCoord).r;
         float terrainAlt = 200.0 + gray * 255.0;
 
         float dist = length(vec2(sampleX - droneX, sampleY - droneY));
@@ -63,19 +62,24 @@ void main() {
         }
     }
 
-    // 🎯 Final pixel terrain altitude
-    float finalGray = texture(altitudeTexture, snappedTexCoord).r;
+    // 🎯 Final point visibility check
+    int fx = col; // already floor()'d
+    int fy = row;
+
+    vec2 finalCoord = (vec2(fx, fy) + 0.5) / vec2(gridCols, gridRows);
+    float finalGray = texture(altitudeTexture, finalCoord).r;
+
     float finalAlt = 200.0 + finalGray * 255.0;
     float finalSlope = (finalAlt - droneAlt) / distance;
+    float diff = (finalSlope + 1e-4) - maxSlope;
 
-    float diff = finalSlope - maxSlope;
-
+    // 🎨 Color logic
     if (diff >= 0.01) {
-        fragColor = vec4(0.0, 1.0, 0.0, qt_Opacity); // 🟢 Visible
+        fragColor = vec4(0.0, 1.0, 0.0, qt_Opacity); // ✅ Visible (green)
     } else if (diff >= -0.02) {
-        fragColor = vec4(1.0, 0.5, 0.0, qt_Opacity); // 🟠 Near blocked
+        fragColor = vec4(1.0, 0.5, 0.0, qt_Opacity); // ⚠️ Barely blocked (orange)
     } else {
-        float strength = clamp(-diff * 10.0, 0.0, 1.0); // redder = more obstructed
-        fragColor = vec4(strength, 0.0, 0.0, qt_Opacity); // 🟥 Obstructed gradient
+        float strength = clamp(-diff * 10.0, 0.0, 1.0); // stronger red = more blocked
+        fragColor = vec4(strength, 0.0, 0.0, qt_Opacity); // ❌ Blocked (red gradient)
     }
 }

@@ -23,6 +23,16 @@ QGC_LOGGING_CATEGORY(TerrainOverlayLog, "qgc.terrainoverlay")
 
 Q_APPLICATION_STATIC(TerrainOverlayGridManager, _instance);
 
+// Simulated terrain toggle
+#define SIMULATED_TERRAIN
+
+// Custom test terrain params (meters AMSL)
+constexpr double kSimMinAltitude = 200.0;
+constexpr double kSimMaxAltitude = 300.0;
+constexpr int kBlockRow = 50;  // Row for raised hill
+constexpr int kBlockCol = 50;  // Col for raised hill
+constexpr int kBlockSize = 10;  // Width/height of square block
+
 TerrainOverlayGridManager* TerrainOverlayGridManager::instance()
 {
     return _instance();
@@ -114,7 +124,7 @@ void TerrainOverlayGridManager::_generateGrid(const QGeoCoordinate& center)
 {
     _altitudes.clear();
 
-    constexpr double halfWidthMeters = 1000.0;
+    constexpr double halfWidthMeters = 2000.0;
 
     double approxLatSpacing = _spacingMeters / 111320.0;
     double approxLatHalf = halfWidthMeters / 111320.0;
@@ -146,6 +156,29 @@ void TerrainOverlayGridManager::_requestTerrainAltitudes()
         return;
     }
 
+#ifdef SIMULATED_TERRAIN
+    qCDebug(TerrainOverlayLog) << "[Overlay] Generating simulated terrain data.";
+
+    _altitudes.fill(kSimMinAltitude);  // Set all to base level
+
+    // Raise block at center-ish
+    for (int row = 0; row < _rows; ++row) {
+        for (int col = 0; col < _cols; ++col) {
+            if (std::abs(row - kBlockRow) <= kBlockSize / 2 &&
+                std::abs(col - kBlockCol) <= kBlockSize / 2) {
+                int idx = row * _cols + col;
+                _altitudes[idx] = kSimMaxAltitude;
+            }
+        }
+    }
+
+    qCDebug(TerrainOverlayLog) << "[Overlay] Simulated terrain populated.";
+    _stopRetryTimer();
+    emit gridChanged();
+    return;
+#endif
+
+    // Regular (real-world) terrain fetch
     QList<QGeoCoordinate> requestPoints;
     double approxLatSpacing = _spacingMeters / 111320.0;
     double centerLatRad = qDegreesToRadians(_center.latitude());

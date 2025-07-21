@@ -133,12 +133,6 @@ void TerrainOverlayMapRenderer::_generateHeatmapImage(const QVariantMap& grid)
             maxAlt = std::max(maxAlt, alt);
         }
     }
-
-    if (minAlt >= maxAlt) {
-        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Altitude range invalid.";
-        return;
-    }
-
     // Create image
     QImage image(cols, rows, QImage::Format_ARGB32);
 

@@ -55,7 +55,7 @@ private:
 
     // Grid definition
     QGeoCoordinate _center;
-    double _spacingMeters = 100.0;
+    double _spacingMeters = 20.0;
     int _rows = 0;
     int _cols = 0;
     QVector<double> _altitudes;
