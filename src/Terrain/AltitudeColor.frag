@@ -56,30 +56,36 @@ void main() {
 
         float dist = length(vec2(sampleX - droneX, sampleY - droneY));
         float slope = (terrainAlt - droneAlt) / dist;
-
-        if (slope > maxSlope) {
+        float epsilon = 1e-4; // Small fudge factor to ignore precision noise
+        if (slope > maxSlope + epsilon) {
             maxSlope = slope;
         }
     }
 
     // 🎯 Final point visibility check
-    int fx = col; // already floor()'d
+    int fx = col;
     int fy = row;
-
     vec2 finalCoord = (vec2(fx, fy) + 0.5) / vec2(gridCols, gridRows);
     float finalGray = texture(altitudeTexture, finalCoord).r;
 
     float finalAlt = 200.0 + finalGray * 255.0;
     float finalSlope = (finalAlt - droneAlt) / distance;
-    float diff = (finalSlope + 1e-4) - maxSlope;
 
-    // 🎨 Color logic
-    if (diff >= 0.01) {
-        fragColor = vec4(0.0, 1.0, 0.0, qt_Opacity); // ✅ Visible (green)
-    } else if (diff >= -0.02) {
-        fragColor = vec4(1.0, 0.5, 0.0, qt_Opacity); // ⚠️ Barely blocked (orange)
-    } else {
-        float strength = clamp(-diff * 10.0, 0.0, 1.0); // stronger red = more blocked
-        fragColor = vec4(strength, 0.0, 0.0, qt_Opacity); // ❌ Blocked (red gradient)
-    }
+    // Difference between final slope and max occluding slope
+    float diff = finalSlope - maxSlope;
+
+    // 🎨 Smooth transition from blocked to clear
+    // Red → Orange → Green depending on how clear it is
+    float t = smoothstep(-0.05, 0.02, diff); // t = 0 → blocked, t = 1 → clear
+
+    vec3 red = vec3(1.0, 0.0, 0.0);
+    vec3 orange = vec3(1.0, 0.5, 0.0);
+    vec3 green = vec3(0.0, 1.0, 0.0);
+
+    // Fade from red → orange → green using two lerps
+    vec3 blockedColor = mix(red, orange, clamp(t * 2.0, 0.0, 1.0));
+    vec3 visibleColor = mix(orange, green, clamp((t - 0.5) * 2.0, 0.0, 1.0));
+    vec3 color = (t < 0.5) ? blockedColor : visibleColor;
+
+    fragColor = vec4(color, qt_Opacity);
 }

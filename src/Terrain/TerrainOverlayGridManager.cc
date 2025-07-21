@@ -29,8 +29,8 @@ Q_APPLICATION_STATIC(TerrainOverlayGridManager, _instance);
 // Custom test terrain params (meters AMSL)
 constexpr double kSimMinAltitude = 200.0;
 constexpr double kSimMaxAltitude = 300.0;
-constexpr int kBlockRow = 50;  // Row for raised hill
-constexpr int kBlockCol = 50;  // Col for raised hill
+constexpr int kBlockRow = 70;  // Row for raised hill
+constexpr int kBlockCol = 70;  // Col for raised hill
 constexpr int kBlockSize = 10;  // Width/height of square block
 
 TerrainOverlayGridManager* TerrainOverlayGridManager::instance()
