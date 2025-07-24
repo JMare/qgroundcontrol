@@ -52,7 +52,7 @@ void main() {
 
         vec2 sampleCoord = (vec2(sx, sy) + 0.5) / vec2(gridCols, gridRows);
         float gray = texture(altitudeTexture, sampleCoord).r;
-        float terrainAlt = 200.0 + gray * 255.0;
+        float terrainAlt = gray;
 
         float dist = length(vec2(sampleX - droneX, sampleY - droneY));
         float slope = (terrainAlt - droneAlt) / dist;
@@ -68,7 +68,7 @@ void main() {
     vec2 finalCoord = (vec2(fx, fy) + 0.5) / vec2(gridCols, gridRows);
     float finalGray = texture(altitudeTexture, finalCoord).r;
 
-    float finalAlt = 200.0 + finalGray * 255.0;
+    float finalAlt = finalGray;
     float finalSlope = (finalAlt - droneAlt) / distance;
 
     // Difference between final slope and max occluding slope

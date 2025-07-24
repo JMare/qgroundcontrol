@@ -334,8 +334,28 @@ FlightMap {
 // --------------------
 
 AltitudeGridOverlay {
-    anchors.fill: parent
     terrainOverlayRenderer: terrainOverlayMapRenderer
+}
+
+MapQuickItem {
+    id: terrainCenterCircle
+    coordinate: QtPositioning.coordinate(terrainOverlayMapRenderer.minLat, terrainOverlayMapRenderer.maxLon)
+    sourceItem: Rectangle {
+        width: 10
+        height: 10
+        color: "red"
+        radius: width / 2
+    }
+}
+MapQuickItem {
+    id: terrainCenterCircle2
+    coordinate: QtPositioning.coordinate(terrainOverlayMapRenderer.maxLat, terrainOverlayMapRenderer.minLon)
+    sourceItem: Rectangle {
+        width: 10
+        height: 10
+        color: "green"
+        radius: width / 2
+    }
 }
 
     // Allow custom builds to add map items

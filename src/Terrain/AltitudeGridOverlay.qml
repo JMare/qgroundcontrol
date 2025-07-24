@@ -11,31 +11,57 @@ MapQuickItem {
     property var terrainOverlayRenderer
 
     z: QGroundControl.zOrderMapItems
-
-    coordinate: QtPositioning.coordinate(
-        terrainOverlayRenderer.maxLat,
-        terrainOverlayRenderer.minLon
-    )
-
-    anchorPoint.x: 0
-    anchorPoint.y: 0
-
-    zoomLevel: terrainOverlayRenderer.overlayNativeZoomLevel
     visible: terrainOverlayRenderer.lastUpdateCounter > 0
 
+    // ✅ Centered on precomputed center
+    coordinate: QtPositioning.coordinate(
+        terrainOverlayRenderer.centerLat,
+        terrainOverlayRenderer.centerLon
+    )
+
+    // ✅ Anchor to center of image (set dynamically)
+    anchorPoint.x: imageItem.width / 2
+    anchorPoint.y: imageItem.height / 2
+
+    zoomLevel: terrainOverlayRenderer.overlayNativeZoomLevel
+
+    sourceItem: Image {
+        id: imageItem
+        source: "image://terrainoverlay/terrain?" + terrainOverlayRenderer.lastUpdateCounter
+        cache: false
+
+        onStatusChanged: {
+            if (status === Image.Ready) {
+                console.log("✅ Heatmap loaded. Image size:", imageItem.width, "x", imageItem.height);
+            }
+        }
+    }
+
+    // ✅ Width and height track actual image
+    width: imageItem.width
+    height: imageItem.height
+
+    /*
     // The custom shader-based source item
     sourceItem: Item {
         id: shaderOverlay
-        width: altitudeCanvas.width
-        height: altitudeCanvas.height
+        width: terrainOverlayRenderer.gridCols
+        height: terrainOverlayRenderer.gridRows
+
+        Component.onCompleted: {
+            console.log("Canvas aspect ratio:", width / height);
+        }
 
         // 👇 Hidden Canvas to create grayscale altitude texture
         Canvas {
             id: altitudeCanvas
-            width: terrainOverlayRenderer.gridCols
-            height: terrainOverlayRenderer.gridRows
+
+            anchors.fill: parent
+
+
             renderTarget: Canvas.FramebufferObject
-            visible: false
+            visible: true
+            opacity: 0.9
 
             onPaint: {
                 const ctx = getContext("2d");
@@ -44,8 +70,8 @@ MapQuickItem {
                 const altitudes = terrainOverlayRenderer.altitudeGrid;
 
                 // 🔢 Fixed encoding range
-                const floorAlt = 200.0;
-                const ceilingAlt = 455.0;
+                const floorAlt = 0.0;
+                const ceilingAlt = 255.0;
                 const range = ceilingAlt - floorAlt;
 
                 for (let row = 0; row < height; row++) {
@@ -92,7 +118,7 @@ MapQuickItem {
             color: "transparent"
             border.color: "white"
             border.width: 0
-            visible: true
+            visible: false
 
             ShaderEffect {
                 anchors.fill: parent
@@ -103,9 +129,6 @@ MapQuickItem {
                 property var activeVehicleCoordinate: _activeVehicle ? _activeVehicle.coordinate : QtPositioning.coordinate()
                 property real droneLat: activeVehicleCoordinate.latitude
                 property real droneLon: activeVehicleCoordinate.longitude
-                onActiveVehicleCoordinateChanged: {
-                    console.log(`📍 Active Vehicle Coordinate changed: lat=${_activeVehicleCoordinate.latitude.toFixed(6)}, lon=${_activeVehicleCoordinate.longitude.toFixed(6)}, alt=${_activeVehicleCoordinate.altitude.toFixed(2)}`)
-                }
                 property real minLat: terrainOverlayRenderer.minLat
                 property real maxLat: terrainOverlayRenderer.maxLat
                 property real minLon: terrainOverlayRenderer.minLon
@@ -146,6 +169,7 @@ MapQuickItem {
                     onHeightChanged: console.log("ShaderEffect height:", height)
                     onMinLatChanged: console.log("minLat changed to:", minLat)
             }
-            }
+        }
     }
+    */
 }

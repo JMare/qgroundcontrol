@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <qtmetamacros.h>
 #include <QObject>
 #include <QGeoCoordinate>
 #include <QLoggingCategory>
@@ -27,6 +28,9 @@ class TerrainOverlayMapRenderer : public QObject
     Q_PROPERTY(QVariantList altitudeGrid READ altitudeGrid NOTIFY gridDataChanged)  // NEW
     Q_PROPERTY(int gridRows READ gridRows NOTIFY gridDataChanged)
     Q_PROPERTY(int gridCols READ gridCols NOTIFY gridDataChanged)
+    Q_INVOKABLE void loadGeoTiff(const QString& filePath);
+    Q_PROPERTY(double centerLat READ centerLat NOTIFY boundsChanged)
+    Q_PROPERTY(double centerLon READ centerLon NOTIFY boundsChanged)
 
 public:
     int _gridRows = 0;
@@ -34,6 +38,9 @@ public:
 
     int gridRows() const { return _gridRows; }
     int gridCols() const { return _gridCols; }
+    double centerLat() const { return _centerLat; }
+    double centerLon() const { return _centerLon; }
+
     static TerrainOverlayMapRenderer* instance();
     static void registerQmlTypes();
 
@@ -58,8 +65,9 @@ private:
     void _connectToManager();
     void _onGridChanged();
     void _computeBounds(const QVariantMap& grid);
-    void _generateHeatmapImage(const QVariantMap& grid);
+    void _generateHeatmapImage();
     void _computeOverlayNativeZoomLevel(int imageWidth, int imageHeight);
+    void _computeBoundsFromGeoTransform(double* gt, int rows, int cols);
 
     HeatmapImageProvider* _imageProvider = nullptr;
 
@@ -67,6 +75,8 @@ private:
     double _minLon = 0.0;
     double _maxLat = 0.0;
     double _maxLon = 0.0;
+    double _centerLat = 0.0;
+    double _centerLon = 0.0;
     double _overlayNativeZoomLevel = 0.0;
 
     int _updateCounter = 0;

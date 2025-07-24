@@ -1,5 +1,7 @@
 find_package(Qt6 REQUIRED COMPONENTS Core Qml ShaderTools)
 
+find_package(GDAL REQUIRED)
+
 qt_add_library(TerrainModule STATIC)
 
 qt_add_qml_module(TerrainModule
@@ -47,4 +49,9 @@ target_include_directories(${CMAKE_PROJECT_NAME}
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/Providers
+)
+
+target_link_libraries(${CMAKE_PROJECT_NAME}
+    PRIVATE
+        GDAL::GDAL
 )

@@ -153,6 +153,8 @@ find_package(Qt6
         Test
 )
 
+find_package(GDAL REQUIRED)
+
 if(LINUX)
     find_package(Qt6 COMPONENTS WaylandClient)
 endif()

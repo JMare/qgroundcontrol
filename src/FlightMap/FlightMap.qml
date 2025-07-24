@@ -22,6 +22,7 @@ import QGroundControl.ScreenTools
 import QGroundControl.MultiVehicleManager
 import QGroundControl.Vehicle
 import QGroundControl.QGCPositionManager
+import QGroundControl.Terrain
 
 Map {
     id: _map
@@ -121,7 +122,7 @@ Map {
     signal mapPanStart
     signal mapPanStop
     signal mapClicked(var position)
-    
+
     PinchHandler {
         id:     pinchHandler
         target: null
@@ -219,4 +220,8 @@ Map {
             }
         }
     }
+
+    //AltitudeGridOverlay {
+    //    terrainOverlayRenderer: terrainOverlayMapRenderer
+    //}
 } // Map
