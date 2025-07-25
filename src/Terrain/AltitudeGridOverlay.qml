@@ -46,7 +46,7 @@ MapQuickItem {
 
         width: heatmapImage.width
         height: heatmapImage.height
-        opacity: 0.05
+        //opacity: 0.05
 
         fragmentShader: "qrc:/shaders/AltitudeColor.frag.qsb"
         vertexShader: "qrc:/shaders/AltitudeColor.vert.qsb"

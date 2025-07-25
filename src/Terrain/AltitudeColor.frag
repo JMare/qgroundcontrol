@@ -68,7 +68,7 @@ void main() {
     vec2 finalCoord = (vec2(fx, fy) + 0.5) / vec2(gridCols, gridRows);
     float finalGray = texture(altitudeTexture, finalCoord).r;
 
-    float finalAlt = finalGray * 255 + 2.0;
+    float finalAlt = finalGray * 255 + 4.0;
     float finalSlope = (finalAlt - droneAlt) / distance;
 
     // Difference between final slope and max occluding slope
@@ -76,16 +76,15 @@ void main() {
 
     // 🎨 Smooth transition from blocked to clear
     // Red → Orange → Green depending on how clear it is
-    float t = smoothstep(-0.05, 0.02, diff); // t = 0 → blocked, t = 1 → clear
+    //float t = smoothstep(-0.05, 0.02, diff); // t = 0 → blocked, t = 1 → clear
+    float t = smoothstep(-0.15, 0.01, diff);
 
-    vec3 red = vec3(1.0, 0.0, 0.0);
-    vec3 orange = vec3(1.0, 0.5, 0.0);
     vec3 green = vec3(0.0, 1.0, 0.0);
+    vec3 color = green;
 
-    // Fade from red → orange → green using two lerps
-    vec3 blockedColor = mix(red, orange, clamp(t * 2.0, 0.0, 1.0));
-    vec3 visibleColor = mix(orange, green, clamp((t - 0.5) * 2.0, 0.0, 1.0));
-    vec3 color = (t < 0.5) ? blockedColor : visibleColor;
-
-    fragColor = vec4(color, qt_Opacity);
+    float alpha = (t < 0.05) ? 0.0 : qt_Opacity * t;
+    if (t <= 0.0) {
+        discard; // Skip rendering this fragment entirely
+    }
+    fragColor = vec4(color, alpha);
 }
