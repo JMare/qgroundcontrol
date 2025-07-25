@@ -333,9 +333,9 @@ FlightMap {
 // DEMO: Altitude-colored tile overlay
 // --------------------
 
-AltitudeGridOverlay {
-    terrainOverlayRenderer: terrainOverlayMapRenderer
-}
+//AltitudeGridOverlay {
+//    terrainOverlayRenderer: terrainOverlayMapRenderer
+//}
 
 MapQuickItem {
     id: terrainCenterCircle

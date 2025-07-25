@@ -221,7 +221,7 @@ Map {
         }
     }
 
-    //AltitudeGridOverlay {
-    //    terrainOverlayRenderer: terrainOverlayMapRenderer
-    //}
+    AltitudeGridOverlay {
+        terrainOverlayRenderer: terrainOverlayMapRenderer
+    }
 } // Map
