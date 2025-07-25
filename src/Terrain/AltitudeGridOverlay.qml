@@ -16,21 +16,15 @@ MapQuickItem {
         terrainOverlayRenderer.centerLon
     )
 
-    // ✅ anchor to center of rendered image
     anchorPoint.x: shaderOverlay.width / 2
     anchorPoint.y: shaderOverlay.height / 2
-
     zoomLevel: terrainOverlayRenderer.overlayNativeZoomLevel
-
-    // ✅ Dynamically resize based on shader content
     width: shaderOverlay.width
     height: shaderOverlay.height
 
-    sourceItem:
-    ShaderEffect {
+    sourceItem: ShaderEffect {
         id: shaderOverlay
 
-        // 🔍 Load terrain image
         property var heatmap: Image {
             id: heatmapImage
             source: "image://terrainoverlay/terrain?" + terrainOverlayRenderer.lastUpdateCounter
@@ -56,62 +50,60 @@ MapQuickItem {
         property real gridCols: heatmapImage.width
         property real gridRows: heatmapImage.height
 
-        // === First Drone (Active) ===
-        property var activeVehicleCoordinate: _activeVehicle ? _activeVehicle.coordinate : QtPositioning.coordinate()
-        property real droneLat: activeVehicleCoordinate.latitude
-        property real droneLon: activeVehicleCoordinate.longitude
-        property real droneAlt: QGroundControl.multiVehicleManager.activeVehicle ?
-            QGroundControl.multiVehicleManager.activeVehicle.altitudeAMSL.value : 250.0
+        // === Drones via indexed access ===
+        property var vehicle1: QGroundControl.multiVehicleManager.vehicles.count > 0
+            ? QGroundControl.multiVehicleManager.vehicles.get(0) : null
 
-        // === Second Drone (if available) ===
-        property var secondVehicle: QGroundControl.multiVehicleManager.vehicles.count > 1 ?
-            QGroundControl.multiVehicleManager.vehicles.get(1) : null
+        property var vehicle2: QGroundControl.multiVehicleManager.vehicles.count > 1
+            ? QGroundControl.multiVehicleManager.vehicles.get(1) : null
 
-        property real droneLat2: secondVehicle ? secondVehicle.coordinate.latitude : 0.0
-        property real droneLon2: secondVehicle ? secondVehicle.coordinate.longitude : 0.0
-        property real droneAlt2: secondVehicle ? secondVehicle.altitudeAMSL.value : 0.0
+        property real droneLat: vehicle1 ? vehicle1.coordinate.latitude : NaN
+        property real droneLon: vehicle1 ? vehicle1.coordinate.longitude : NaN
+        property real droneAlt: vehicle1 ? vehicle1.altitudeAMSL.value : 250.0
 
-        // === Terrain Bounds ===
+        property real droneLat2: vehicle2 ? vehicle2.coordinate.latitude : NaN
+        property real droneLon2: vehicle2 ? vehicle2.coordinate.longitude : NaN
+        property real droneAlt2: vehicle2 ? vehicle2.altitudeAMSL.value : 250.0
+
+        // === Terrain bounds
         property real minLat: terrainOverlayRenderer.minLat
         property real maxLat: terrainOverlayRenderer.maxLat
         property real minLon: terrainOverlayRenderer.minLon
         property real maxLon: terrainOverlayRenderer.maxLon
 
-        // === Coordinate to Pixel Conversion ===
+        // === Safe pixel coordinate conversion with lat/lon sanity check
         property real droneX: {
             const lonSpan = maxLon - minLon;
-            return lonSpan > 0 ? (droneLon - minLon) / lonSpan * gridCols : 0;
+            if (!isFinite(droneLon) || droneLon < -180 || droneLon > 180 || lonSpan <= 0) return NaN;
+            return (droneLon - minLon) / lonSpan * gridCols;
         }
 
         property real droneY: {
             const latSpan = maxLat - minLat;
-            return latSpan > 0 ? (maxLat - droneLat) / latSpan * gridRows : 0;
+            if (!isFinite(droneLat) || droneLat < -90 || droneLat > 90 || latSpan <= 0) return NaN;
+            return (maxLat - droneLat) / latSpan * gridRows;
         }
 
         property real droneX2: {
             const lonSpan = maxLon - minLon;
-            return secondVehicle && lonSpan > 0 ? (droneLon2 - minLon) / lonSpan * gridCols : 0;
+            if (!isFinite(droneLon2) || droneLon2 < -180 || droneLon2 > 180 || lonSpan <= 0) return NaN;
+            return (droneLon2 - minLon) / lonSpan * gridCols;
         }
 
         property real droneY2: {
             const latSpan = maxLat - minLat;
-            return secondVehicle && latSpan > 0 ? (maxLat - droneLat2) / latSpan * gridRows : 0;
+            if (!isFinite(droneLat2) || droneLat2 < -90 || droneLat2 > 90 || latSpan <= 0) return NaN;
+            return (maxLat - droneLat2) / latSpan * gridRows;
         }
 
-        onDroneXChanged: console.log("📍 Drone 1 X:", droneX.toFixed(2))
-        onDroneYChanged: console.log("📍 Drone 1 Y:", droneY.toFixed(2))
-        onDroneX2Changed: console.log("📍 Drone 2 X:", droneX2.toFixed(2))
-        onDroneY2Changed: console.log("📍 Drone 2 Y:", droneY2.toFixed(2))
+        // === Debugging logs
+        onDroneXChanged: console.log("📍 Drone 1 X:", droneX)
+        onDroneYChanged: console.log("📍 Drone 1 Y:", droneY)
+        onDroneX2Changed: console.log("📍 Drone 2 X:", droneX2)
+        onDroneY2Changed: console.log("📍 Drone 2 Y:", droneY2)
 
         Component.onCompleted: {
-            console.log("🚁 Total vehicles:", QGroundControl.multiVehicleManager.vehicles.length);
+            console.log("🚁 Total vehicles:", QGroundControl.multiVehicleManager.vehicles.count);
         }
-        onSecondVehicleChanged: {
-        if (secondVehicle) {
-            console.log("✅ Second drone detected at:", secondVehicle.coordinate);
-        } else {
-            console.log("❌ No second drone available");
-        }
-}
     }
 }
