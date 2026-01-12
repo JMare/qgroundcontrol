@@ -6,26 +6,41 @@ layout(location = 0) out vec4 fragColor;
 layout(std140, binding = 0) uniform buf {
     mat4 qt_Matrix;
     float qt_Opacity;
+
     float droneAlt;
     float droneX;
     float droneY;
-    float droneAlt2;
-    float droneX2;
-    float droneY2;
+
     float gridCols;
     float gridRows;
+
+    float metersPerPixelX;
+    float metersPerPixelY;
+
+    float freqMHz;
+
+    // LTE-ish display range (RSRP)
+    float minDbm;   // recommend -120.0 (or -130.0)
+    float maxDbm;   // recommend -80.0
 };
 
 layout(binding = 1) uniform sampler2D altitudeTexture;
 
-// 🔁 LOS visibility function for a given drone
-float computeVisibility(float droneX, float droneY, float droneAlt, float fragX, float fragY) {
+float sampleTerrainAlt(float x, float y) {
+    int sx = int(clamp(floor(x), 0.0, gridCols - 1.0));
+    int sy = int(clamp(floor(y), 0.0, gridRows - 1.0));
+    vec2 uv = (vec2(sx, sy) + 0.5) / vec2(gridCols, gridRows);
+    float gray = texture(altitudeTexture, uv).r;
+    return gray * 255.0;
+}
+
+float computeVisibility(float fragX, float fragY) {
     float dx = fragX - droneX;
     float dy = fragY - droneY;
-    float distance = sqrt(dx * dx + dy * dy);
-    if (distance < 0.5) return 1.0;
+    float dist2D = sqrt(dx * dx + dy * dy);
+    if (dist2D < 0.5) return 1.0;
 
-    float stepCount = distance;
+    float stepCount = dist2D;
     float stepX = dx / stepCount;
     float stepY = dy / stepCount;
 
@@ -37,80 +52,121 @@ float computeVisibility(float droneX, float droneY, float droneAlt, float fragX,
         sampleX += stepX;
         sampleY += stepY;
 
-        int sx = int(clamp(floor(sampleX), 0.0, gridCols - 1.0));
-        int sy = int(clamp(floor(sampleY), 0.0, gridRows - 1.0));
+        float terrainAlt = sampleTerrainAlt(sampleX, sampleY);
 
-        vec2 sampleCoord = (vec2(sx, sy) + 0.5) / vec2(gridCols, gridRows);
-        float gray = texture(altitudeTexture, sampleCoord).r;
-        float terrainAlt = gray * 255.0;
+        float d = length(vec2(sampleX - droneX, sampleY - droneY));
+        d = max(d, 1e-3);
 
-        float dist = length(vec2(sampleX - droneX, sampleY - droneY));
-        float slope = (terrainAlt - droneAlt) / dist;
-        float epsilon = 1e-4;
-        if (slope > maxSlope + epsilon) {
-            maxSlope = slope;
-        }
+        float slope = (terrainAlt - droneAlt) / d;
+        maxSlope = max(maxSlope, slope);
     }
 
-    vec2 finalCoord = (vec2(fragX, fragY) + 0.5) / vec2(gridCols, gridRows);
-    float finalGray = texture(altitudeTexture, finalCoord).r;
-    float finalAlt = finalGray * 255.0;
-    float finalSlope = (finalAlt - droneAlt) / distance;
+    float finalAlt = sampleTerrainAlt(fragX, fragY);
+    float finalSlope = (finalAlt - droneAlt) / max(dist2D, 1e-3);
 
     float diff = finalSlope - maxSlope;
-    float visibility = smoothstep(-0.15, 0.01, diff);
-    return visibility;
+    return smoothstep(-0.15, 0.01, diff);
+}
+
+float log10_safe(float x) {
+    return log(max(x, 1e-30)) * 0.4342944819;
+}
+
+// LTE-style discrete heatmap for RSRP-like dBm values.
+// Thresholds based on common planning bins:
+// >= -80 excellent, -80..-90 good, -90..-100 fair, -100..-110 poor, -110..-120 very poor.
+vec4 lteHeatmap(float dbm) {
+    // Below min: transparent
+    if (dbm < minDbm) return vec4(0.0);
+
+    // Clamp for safety
+    dbm = clamp(dbm, minDbm, maxDbm);
+
+    // Bin edges (dBm)
+    float t0 = -120.0; // very poor
+    float t1 = -110.0; // poor
+    float t2 = -100.0; // fair
+    float t3 = -90.0;  // good
+    float t4 = -80.0;  // excellent
+
+    // If your min/max differ from these, keep bins aligned by shifting,
+    // but for LTE this set is a good default.
+
+    // Colors (RGBA) - common RF map style: blue weak -> green/yellow -> red strong
+    vec4 c0 = vec4(0.00, 0.20, 0.80, 1.0); // blue
+    vec4 c1 = vec4(0.00, 0.80, 0.80, 1.0); // cyan
+    vec4 c2 = vec4(0.00, 0.85, 0.20, 1.0); // green
+    vec4 c3 = vec4(1.00, 0.90, 0.00, 1.0); // yellow
+    vec4 c4 = vec4(1.00, 0.20, 0.00, 1.0); // red
+
+    // Smooth transitions between bins (2 dB smoothing)
+    float w = 2.0;
+
+    if (dbm < t1) {
+        float u = smoothstep(t0, t0 + w, dbm);
+        return mix(vec4(0.0), c0, u);
+    } else if (dbm < t2) {
+        float u = smoothstep(t1, t1 + w, dbm);
+        return mix(c0, c1, u);
+    } else if (dbm < t3) {
+        float u = smoothstep(t2, t2 + w, dbm);
+        return mix(c1, c2, u);
+    } else if (dbm < t4) {
+        float u = smoothstep(t3, t3 + w, dbm);
+        return mix(c2, c3, u);
+    } else {
+        float u = smoothstep(t4 - w, t4, dbm);
+        return mix(c3, c4, u);
+    }
 }
 
 void main() {
-    // 🔲 Snap fragment to grid pixel center
     int col = int(floor(vTexCoord.x * gridCols));
     int row = int(floor(vTexCoord.y * gridRows));
     float fragX = float(col);
     float fragY = float(row);
 
-    // 🔍 Compute visibility for both drones
-    float t1 = computeVisibility(droneX, droneY, droneAlt, fragX, fragY);
-    float t2 = computeVisibility(droneX2, droneY2, droneAlt2, fragX, fragY);
+    // NaN guard
+    if (droneX != droneX || droneY != droneY || droneAlt != droneAlt) discard;
+    if (gridCols <= 1.0 || gridRows <= 1.0) discard;
 
-    // ❌ Discard if not visible to either
-    if (t1 <= 0.0 && t2 <= 0.0) {
-        discard;
-    }
+    float vis = computeVisibility(fragX, fragY);
+    if (vis <= 0.001) discard;
 
-    // 🎨 Define colors
-    vec3 color1 = vec3(0.0, 1.0, 1.0); // cyan (Drone 1)
-    vec3 color2 = vec3(1.0, 0.5, 0.0); // orange (Drone 2)
+    float fragAlt = sampleTerrainAlt(fragX, fragY);
 
-    // 📏 Distance to each drone
-    float dx1 = fragX - droneX;
-    float dy1 = fragY - droneY;
-    float d1 = sqrt(dx1 * dx1 + dy1 * dy1);
+    float dxm = (fragX - droneX) * metersPerPixelX;
+    float dym = (fragY - droneY) * metersPerPixelY;
+    float dzm = fragAlt - droneAlt;
 
-    float dx2 = fragX - droneX2;
-    float dy2 = fragY - droneY2;
-    float d2 = sqrt(dx2 * dx2 + dy2 * dy2);
+    float d_m = sqrt(dxm*dxm + dym*dym + dzm*dzm);
+    d_m = max(d_m, 1.0);
 
-    // 🧠 Pick the closer visible drone
-    vec3 color;
-    float t;
-    if (t1 > 0.0 && t2 > 0.0) {
-        if (d1 <= d2) {
-            color = color1;
-            t = t1;
-        } else {
-            color = color2;
-            t = t2;
-        }
-    } else if (t1 > 0.0) {
-        color = color1;
-        t = t1;
-    } else {
-        color = color2;
-        t = t2;
-    }
+    // Dipole (vertical axis)
+    float cosTheta = abs(dzm) / d_m;
+    float p = 1.0 - cosTheta * cosTheta;
+    p = clamp(p, 0.0, 1.0);
 
-    // 🫧 Reduced opacity
-    float alpha = qt_Opacity * 0.4 * t;
-    fragColor = vec4(color, alpha);
+    // Peak dipole gain ~2.15 dBi; relative power -> dB
+    float dipole_dBi = 2.15 + 10.0 * log10_safe(max(p, 1e-6));
+
+    // FSPL
+    float d_km = d_m * 0.001;
+    float fspl_dB = 32.44
+        + 20.0 * log10_safe(max(freqMHz, 1e-3))
+        + 20.0 * log10_safe(max(d_km, 1e-6));
+
+    // 1 W TX power
+    float pt_dBm = 30.0;
+    float systemLoss_dB = 30.0;   // LTE system / RSRP normalization
+    float pr_dBm = pt_dBm + dipole_dBi - fspl_dB - systemLoss_dB;
+
+    // Heatmap color by RSRP-like strength
+    vec4 hm = lteHeatmap(pr_dBm);
+    if (hm.a <= 0.0) discard;
+
+    // Use LOS as alpha multiplier (optional: convert to dB loss instead)
+    float alpha = qt_Opacity * 0.85 * hm.a * clamp(vis, 0.0, 1.0);
+
+    fragColor = vec4(hm.rgb, alpha);
 }

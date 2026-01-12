@@ -100,8 +100,9 @@ Item {
         id: shaderOverlay
         visible: false   // enabled by updateGeometry()
 
+        // Point to the new compiled shaders
         fragmentShader: "qrc:/shaders/AltitudeColor.frag.qsb"
-        vertexShader:   "qrc:/shaders/AltitudeColor.vert.qsb"
+        vertexShader:   "qrc:/shaders/AltitudeColor.vert.qsb"   // can also reuse AltitudeColor.vert.qsb if unchanged
 
         // --- Texture source (unchanged) ---
         property var heatmap: Image {
@@ -112,32 +113,25 @@ Item {
 
             onStatusChanged: {
                 if (status === Image.Ready) {
-                    // If the image changes size, recalc. If it's constant, harmless.
+                    // If the image changes size, recalc overlay placement
                     terrainOverlay.updateGeometry()
                 }
             }
         }
 
-        // These remain for your shader bindings
+        // These remain for shader bindings
         property var source: heatmapImage
         property var altitudeTexture: heatmapImage
         property real gridCols: heatmapImage.width
         property real gridRows: heatmapImage.height
 
-        // --- Drones (unchanged) ---
+        // --- Single drone (transmitter) ---
         property var vehicle1: QGroundControl.multiVehicleManager.vehicles.count > 0
             ? QGroundControl.multiVehicleManager.vehicles.get(0) : null
-
-        property var vehicle2: QGroundControl.multiVehicleManager.vehicles.count > 1
-            ? QGroundControl.multiVehicleManager.vehicles.get(1) : null
 
         property real droneLat: vehicle1 ? vehicle1.coordinate.latitude : NaN
         property real droneLon: vehicle1 ? vehicle1.coordinate.longitude : NaN
         property real droneAlt: vehicle1 ? vehicle1.altitudeAMSL.value : 250.0
-
-        property real droneLat2: vehicle2 ? vehicle2.coordinate.latitude : NaN
-        property real droneLon2: vehicle2 ? vehicle2.coordinate.longitude : NaN
-        property real droneAlt2: vehicle2 ? vehicle2.altitudeAMSL.value : 250.0
 
         // --- Terrain bounds (unchanged) ---
         property real minLat: terrainOverlayRenderer.minLat
@@ -145,7 +139,7 @@ Item {
         property real minLon: terrainOverlayRenderer.minLon
         property real maxLon: terrainOverlayRenderer.maxLon
 
-        // --- Mapping drone coords into raster pixel space (unchanged) ---
+        // --- Mapping drone coords into raster pixel space ---
         property real droneX: {
             const lonSpan = maxLon - minLon;
             if (!isFinite(droneLon) || droneLon < -180 || droneLon > 180 || lonSpan <= 0) return NaN;
@@ -158,22 +152,30 @@ Item {
             return (maxLat - droneLat) / latSpan * gridRows;
         }
 
-        property real droneX2: {
-            const lonSpan = maxLon - minLon;
-            if (!isFinite(droneLon2) || droneLon2 < -180 || droneLon2 > 180 || lonSpan <= 0) return NaN;
-            return (droneLon2 - minLon) / lonSpan * gridCols;
+        property real metersPerPixelX: {
+          const lat0 = (minLat + maxLat) * 0.5
+          const mPerDegLon = 111320.0 * Math.cos(lat0 * Math.PI/180.0)
+          return (maxLon - minLon) * mPerDegLon / gridCols
         }
 
-        property real droneY2: {
-            const latSpan = maxLat - minLat;
-            if (!isFinite(droneLat2) || droneLat2 < -90 || droneLat2 > 90 || latSpan <= 0) return NaN;
-            return (maxLat - droneLat2) / latSpan * gridRows;
+        property real metersPerPixelY: {
+          const mPerDegLat = 111320.0
+          return (maxLat - minLat) * mPerDegLat / gridRows
         }
 
-        // Optional debug
-        // onDroneXChanged: console.log("📍 Drone 1 X:", droneX)
-        // onDroneYChanged: console.log("📍 Drone 1 Y:", droneY)
-        // onDroneX2Changed: console.log("📍 Drone 2 X:", droneX2)
-        // onDroneY2Changed: console.log("📍 Drone 2 Y:", droneY2)
+
+        // --- RF tuning knobs (new) ---
+        // 1W as a relative scalar for now; later we’ll do proper dBm+FSPL
+        property real txPower: 0.0001
+
+        property real freqMHz: 1800.0    // LTE typical: 700, 850, 900, 1800, 2100, 2600
+        property real minDbm: -120.0
+        property real maxDbm: -80.0
+        // Safety: if the drone is not valid, hide (prevents NaN from nuking the shader)
+        onDroneXChanged: {
+            if (!isFinite(droneX) || !isFinite(droneY) || !isFinite(droneAlt)) {
+                // Let the outer updateGeometry decide visibility, but avoid spamming logs
+            }
+        }
     }
 }
