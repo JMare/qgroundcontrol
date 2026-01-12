@@ -22,7 +22,6 @@ import QGroundControl.FlightMap
 import QGroundControl.Palette
 import QGroundControl.ScreenTools
 import QGroundControl.Vehicle
-import QGroundControl.TerrainOverlayGridManager
 import QGroundControl.TerrainOverlayMapRenderer
 import QGroundControl.Terrain
 

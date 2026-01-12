@@ -70,7 +70,6 @@
 #include "Vehicle.h"
 #include "VehicleComponent.h"
 #include "VideoManager.h"
-#include "TerrainOverlayGridManager.h"
 #include "TerrainOverlayMapRenderer.h"
 #include "HeatmapImageProvider.h"
 
@@ -279,7 +278,6 @@ void QGCApplication::init()
 #ifdef QGC_VIEWER3D
     Viewer3DManager::registerQmlTypes();
 #endif
-TerrainOverlayGridManager::registerQmlTypes();
 TerrainOverlayMapRenderer::registerQmlTypes();
 
     qmlRegisterUncreatableType<GimbalController>("QGroundControl.Vehicle", 1, 0, "GimbalController", "Reference only");
@@ -358,7 +356,6 @@ void QGCApplication::_initForNormalAppBoot()
     LinkManager::instance()->init();
     VideoManager::instance()->init(mainRootWindow());
 
-    TerrainOverlayGridManager::instance();
     TerrainOverlayMapRenderer::instance();
 
     // Image provider for Optical Flow

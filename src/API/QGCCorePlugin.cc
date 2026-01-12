@@ -12,7 +12,6 @@
 #include "AppSettings.h"
 #include "MavlinkSettings.h"
 #include "FactMetaData.h"
-#include "TerrainOverlayGridManager.h"
 #include "TerrainOverlayMapRenderer.h"
 
 #ifdef QGC_GST_STREAMING
@@ -32,7 +31,6 @@
 #endif
 #include "SettingsManager.h"
 #include "VideoReceiver.h"
-#include "TerrainOverlayGridManager.h"
 
 #ifdef QGC_CUSTOM_BUILD
 #include CUSTOMHEADER
@@ -272,7 +270,6 @@ QQmlApplicationEngine *QGCCorePlugin::createQmlApplicationEngine(QObject *parent
     QQmlApplicationEngine *const qmlEngine = new QQmlApplicationEngine(parent);
     qmlEngine->addImportPath(QStringLiteral("qrc:/qml"));
     qmlEngine->rootContext()->setContextProperty(QStringLiteral("joystickManager"), JoystickManager::instance());
-    qmlEngine->rootContext()->setContextProperty(QStringLiteral("terrainOverlayGridManager"), TerrainOverlayGridManager::instance());
     qmlEngine->rootContext()->setContextProperty(QStringLiteral("terrainOverlayMapRenderer"), TerrainOverlayMapRenderer::instance());
     qmlEngine->rootContext()->setContextProperty(QStringLiteral("debugMessageModel"), QGCLogging::instance());
     qmlEngine->rootContext()->setContextProperty(QStringLiteral("logDownloadController"), LogDownloadController::instance());

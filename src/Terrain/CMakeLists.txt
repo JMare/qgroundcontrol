@@ -34,11 +34,7 @@ target_sources(${CMAKE_PROJECT_NAME}
         TerrainTile.h
         TerrainTileManager.cc
         TerrainTileManager.h
-        TerrainOverlayGridManager.cc
-        TerrainOverlayGridManager.h
         TerrainGridCell.h
-        TerrainOverlayGridModel.cc
-        TerrainOverlayGridModel.h
         TerrainOverlayMapRenderer.cc
         TerrainOverlayMapRenderer.h
         HeatmapImageProvider.cc

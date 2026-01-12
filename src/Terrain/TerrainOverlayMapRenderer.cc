@@ -7,7 +7,6 @@
  ****************************************************************************/
 
 #include "TerrainOverlayMapRenderer.h"
-#include "TerrainOverlayGridManager.h"
 #include "HeatmapImageProvider.h"
 
 #include <QVariant>
