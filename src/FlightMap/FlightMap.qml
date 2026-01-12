@@ -222,6 +222,139 @@ Map {
     }
 
     AltitudeGridOverlay {
+        map: _map
         terrainOverlayRenderer: terrainOverlayMapRenderer
+    }
+    // ---- DEBUG: GeoTIFF bounds markers (direct Map children) ----
+
+    // Turn on/off quickly
+    property bool showOverlayDebug: true
+
+    // Convenience aliases
+    property real _ovMinLat: terrainOverlayMapRenderer.minLat
+    property real _ovMaxLat: terrainOverlayMapRenderer.maxLat
+    property real _ovMinLon: terrainOverlayMapRenderer.minLon
+    property real _ovMaxLon: terrainOverlayMapRenderer.maxLon
+
+    property bool _ovBoundsValid: terrainOverlayMapRenderer.lastUpdateCounter > 0
+        && isFinite(_ovMinLat) && isFinite(_ovMaxLat) && isFinite(_ovMinLon) && isFinite(_ovMaxLon)
+        && (_ovMaxLat > _ovMinLat) && (_ovMaxLon > _ovMinLon)
+
+    // Radius that stays visible across zoom levels (meters)
+    property real _ovRadiusMeters: {
+        if (zoomLevel >= 17) return 8
+        if (zoomLevel >= 15) return 15
+        if (zoomLevel >= 13) return 30
+        return 80
+    }
+
+    // TL circle
+    MapCircle {
+        visible: _map.showOverlayDebug && _map._ovBoundsValid
+        center: QtPositioning.coordinate(_map._ovMaxLat, _map._ovMinLon)
+        radius: _map._ovRadiusMeters
+        color: "#40ff0000"
+        border.color: "red"
+        border.width: 2
+    }
+    MapQuickItem {
+        visible: _map.showOverlayDebug && _map._ovBoundsValid
+        coordinate: QtPositioning.coordinate(_map._ovMaxLat, _map._ovMinLon)
+        anchorPoint.x: tlLabel.width / 2
+        anchorPoint.y: tlLabel.height + 2
+        sourceItem: Rectangle {
+            id: tlLabel
+            color: "#b0000000"
+            radius: 3
+            border.color: "red"
+            border.width: 1
+            Text { text: "TL"; color: "white"; padding: 4; font.pixelSize: 12 }
+        }
+    }
+
+    // TR circle
+    MapCircle {
+        visible: _map.showOverlayDebug && _map._ovBoundsValid
+        center: QtPositioning.coordinate(_map._ovMaxLat, _map._ovMaxLon)
+        radius: _map._ovRadiusMeters
+        color: "#4000ff00"
+        border.color: "lime"
+        border.width: 2
+    }
+    MapQuickItem {
+        visible: _map.showOverlayDebug && _map._ovBoundsValid
+        coordinate: QtPositioning.coordinate(_map._ovMaxLat, _map._ovMaxLon)
+        anchorPoint.x: trLabel.width / 2
+        anchorPoint.y: trLabel.height + 2
+        sourceItem: Rectangle {
+            id: trLabel
+            color: "#b0000000"
+            radius: 3
+            border.color: "lime"
+            border.width: 1
+            Text { text: "TR"; color: "white"; padding: 4; font.pixelSize: 12 }
+        }
+    }
+
+    // BL circle
+    MapCircle {
+        visible: _map.showOverlayDebug && _map._ovBoundsValid
+        center: QtPositioning.coordinate(_map._ovMinLat, _map._ovMinLon)
+        radius: _map._ovRadiusMeters
+        color: "#400000ff"
+        border.color: "dodgerblue"
+        border.width: 2
+    }
+    MapQuickItem {
+        visible: _map.showOverlayDebug && _map._ovBoundsValid
+        coordinate: QtPositioning.coordinate(_map._ovMinLat, _map._ovMinLon)
+        anchorPoint.x: blLabel.width / 2
+        anchorPoint.y: -2
+        sourceItem: Rectangle {
+            id: blLabel
+            color: "#b0000000"
+            radius: 3
+            border.color: "dodgerblue"
+            border.width: 1
+            Text { text: "BL"; color: "white"; padding: 4; font.pixelSize: 12 }
+        }
+    }
+
+    // BR circle
+    MapCircle {
+        visible: _map.showOverlayDebug && _map._ovBoundsValid
+        center: QtPositioning.coordinate(_map._ovMinLat, _map._ovMaxLon)
+        radius: _map._ovRadiusMeters
+        color: "#40ffff00"
+        border.color: "yellow"
+        border.width: 2
+    }
+    MapQuickItem {
+        visible: _map.showOverlayDebug && _map._ovBoundsValid
+        coordinate: QtPositioning.coordinate(_map._ovMinLat, _map._ovMaxLon)
+        anchorPoint.x: brLabel.width / 2
+        anchorPoint.y: -2
+        sourceItem: Rectangle {
+            id: brLabel
+            color: "#b0000000"
+            radius: 3
+            border.color: "yellow"
+            border.width: 1
+            Text { text: "BR"; color: "white"; padding: 4; font.pixelSize: 12 }
+        }
+    }
+
+    // Outline of the GeoTIFF bounds
+    MapPolyline {
+        visible: _map.showOverlayDebug && _map._ovBoundsValid
+        line.width: 3
+        line.color: "magenta"
+        path: [
+            QtPositioning.coordinate(_map._ovMaxLat, _map._ovMinLon), // TL
+            QtPositioning.coordinate(_map._ovMaxLat, _map._ovMaxLon), // TR
+            QtPositioning.coordinate(_map._ovMinLat, _map._ovMaxLon), // BR
+            QtPositioning.coordinate(_map._ovMinLat, _map._ovMinLon), // BL
+            QtPositioning.coordinate(_map._ovMaxLat, _map._ovMinLon)  // close
+        ]
     }
 } // Map
