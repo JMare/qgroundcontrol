@@ -1,3 +1,4 @@
+// RadioLOS_Attitude.frag
 #version 440
 
 layout(location = 0) in vec2 vTexCoord;
@@ -7,25 +8,43 @@ layout(std140, binding = 0) uniform buf {
     mat4 qt_Matrix;
     float qt_Opacity;
 
+    // TX (drone) in raster/grid space + altitude in meters (AMSL)
     float droneAlt;
     float droneX;
     float droneY;
 
+    // Raster grid size (pixels)
     float gridCols;
     float gridRows;
 
-    float metersPerPixelX;
-    float metersPerPixelY;
+    // Pixel-to-meter scale (you added these in QML)
+    float metersPerPixelX; // meters per pixel in +X (east / lon direction)
+    float metersPerPixelY; // meters per pixel in +Y (north / lat direction)
 
-    float freqMHz;
+    // RF params
+    float freqMHz;        // e.g. 1800.0
+    float minDbm;         // e.g. -120.0
+    float maxDbm;         // e.g. -80.0
+    float systemLoss_dB;  // e.g. 30.0 (LTE-ish normalization / margins)
 
-    // LTE-ish display range (RSRP)
-    float minDbm;   // recommend -120.0 (or -130.0)
-    float maxDbm;   // recommend -80.0
+    // NEW: antenna axis in ENU (east,north,up), normalized in QML ideally
+    float antAxisX;
+    float antAxisY;
+    float antAxisZ;
 };
 
 layout(binding = 1) uniform sampler2D altitudeTexture;
 
+// --- Helpers ---
+
+float log10_safe(float x) {
+    // log10(x) = ln(x) / ln(10); 1/ln(10) ≈ 0.4342944819
+    return log(max(x, 1e-30)) * 0.4342944819;
+}
+
+// Terrain decode: assumes your provider encodes altitude as gray*255.
+// If you actually normalize real meters into 0..1, replace this with
+// fragAlt = terrainMin + gray*(terrainMax-terrainMin).
 float sampleTerrainAlt(float x, float y) {
     int sx = int(clamp(floor(x), 0.0, gridCols - 1.0));
     int sy = int(clamp(floor(y), 0.0, gridRows - 1.0));
@@ -34,6 +53,7 @@ float sampleTerrainAlt(float x, float y) {
     return gray * 255.0;
 }
 
+// LOS visibility along ray drone->frag. Returns 0..1.
 float computeVisibility(float fragX, float fragY) {
     float dx = fragX - droneX;
     float dy = fragY - droneY;
@@ -68,39 +88,26 @@ float computeVisibility(float fragX, float fragY) {
     return smoothstep(-0.15, 0.01, diff);
 }
 
-float log10_safe(float x) {
-    return log(max(x, 1e-30)) * 0.4342944819;
-}
-
-// LTE-style discrete heatmap for RSRP-like dBm values.
-// Thresholds based on common planning bins:
-// >= -80 excellent, -80..-90 good, -90..-100 fair, -100..-110 poor, -110..-120 very poor.
+// LTE-style discrete heatmap for RSRP-like values
 vec4 lteHeatmap(float dbm) {
-    // Below min: transparent
     if (dbm < minDbm) return vec4(0.0);
-
-    // Clamp for safety
     dbm = clamp(dbm, minDbm, maxDbm);
 
-    // Bin edges (dBm)
-    float t0 = -120.0; // very poor
-    float t1 = -110.0; // poor
-    float t2 = -100.0; // fair
-    float t3 = -90.0;  // good
-    float t4 = -80.0;  // excellent
+    // Common LTE RSRP bins (dBm)
+    float t0 = -120.0;
+    float t1 = -110.0;
+    float t2 = -100.0;
+    float t3 = -90.0;
+    float t4 = -80.0;
 
-    // If your min/max differ from these, keep bins aligned by shifting,
-    // but for LTE this set is a good default.
-
-    // Colors (RGBA) - common RF map style: blue weak -> green/yellow -> red strong
+    // Colors: weak (blue) -> strong (red)
     vec4 c0 = vec4(0.00, 0.20, 0.80, 1.0); // blue
     vec4 c1 = vec4(0.00, 0.80, 0.80, 1.0); // cyan
     vec4 c2 = vec4(0.00, 0.85, 0.20, 1.0); // green
     vec4 c3 = vec4(1.00, 0.90, 0.00, 1.0); // yellow
     vec4 c4 = vec4(1.00, 0.20, 0.00, 1.0); // red
 
-    // Smooth transitions between bins (2 dB smoothing)
-    float w = 2.0;
+    float w = 2.0; // smoothing width in dB
 
     if (dbm < t1) {
         float u = smoothstep(t0, t0 + w, dbm);
@@ -121,51 +128,69 @@ vec4 lteHeatmap(float dbm) {
 }
 
 void main() {
+    // Snap to raster cell center
     int col = int(floor(vTexCoord.x * gridCols));
     int row = int(floor(vTexCoord.y * gridRows));
     float fragX = float(col);
     float fragY = float(row);
 
-    // NaN guard
+    // NaN/degenerate guards (portable)
     if (droneX != droneX || droneY != droneY || droneAlt != droneAlt) discard;
     if (gridCols <= 1.0 || gridRows <= 1.0) discard;
 
+    // LOS
     float vis = computeVisibility(fragX, fragY);
     if (vis <= 0.001) discard;
 
+    // Receiver point altitude (ground)
     float fragAlt = sampleTerrainAlt(fragX, fragY);
 
-    float dxm = (fragX - droneX) * metersPerPixelX;
-    float dym = (fragY - droneY) * metersPerPixelY;
-    float dzm = fragAlt - droneAlt;
+    // Convert raster delta -> meters (ENU-ish)
+    float dxm = (fragX - droneX) * metersPerPixelX; // east-ish
+    float dym = (fragY - droneY) * metersPerPixelY; // north-ish
+    float dzm = fragAlt - droneAlt;                 // up-ish
 
     float d_m = sqrt(dxm*dxm + dym*dym + dzm*dzm);
-    d_m = max(d_m, 1.0);
+    d_m = max(d_m, 10.0); // avoid near-field dominance (10m clamp)
 
-    // Dipole (vertical axis)
-    float cosTheta = abs(dzm) / d_m;
+    // Direction unit vector in ENU (same basis as your axis uniforms)
+    vec3 dirN = vec3(dxm, dym, dzm) / d_m;
+
+    // Antenna axis in ENU from QML (fallback to vertical)
+    vec3 axis = vec3(antAxisX, antAxisY, antAxisZ);
+    float axisLen = length(axis);
+    // NaN check: NaN != NaN
+    if (axis.x != axis.x || axis.y != axis.y || axis.z != axis.z || axisLen < 0.5) {
+        axis = vec3(0.0, 0.0, 1.0);
+    } else {
+        axis /= axisLen;
+    }
+
+    // Dipole power pattern: sin^2(theta) where theta is angle from axis
+    float cosTheta = abs(dot(dirN, axis));
     float p = 1.0 - cosTheta * cosTheta;
     p = clamp(p, 0.0, 1.0);
 
-    // Peak dipole gain ~2.15 dBi; relative power -> dB
+    // Convert relative pattern power -> dBi (peak ~ 2.15 dBi)
     float dipole_dBi = 2.15 + 10.0 * log10_safe(max(p, 1e-6));
 
-    // FSPL
+    // FSPL (dB), distance in km, frequency in MHz
     float d_km = d_m * 0.001;
     float fspl_dB = 32.44
-        + 20.0 * log10_safe(max(freqMHz, 1e-3))
-        + 20.0 * log10_safe(max(d_km, 1e-6));
+                  + 20.0 * log10_safe(max(freqMHz, 1e-3))
+                  + 20.0 * log10_safe(max(d_km, 1e-6));
 
     // 1 W TX power
     float pt_dBm = 30.0;
-    float systemLoss_dB = 30.0;   // LTE system / RSRP normalization
+
+    // RSRP-like received level with a tunable system loss term
     float pr_dBm = pt_dBm + dipole_dBi - fspl_dB - systemLoss_dB;
 
-    // Heatmap color by RSRP-like strength
+    // Heatmap coloring
     vec4 hm = lteHeatmap(pr_dBm);
     if (hm.a <= 0.0) discard;
 
-    // Use LOS as alpha multiplier (optional: convert to dB loss instead)
+    // Alpha: include LOS confidence
     float alpha = qt_Opacity * 0.85 * hm.a * clamp(vis, 0.0, 1.0);
 
     fragColor = vec4(hm.rgb, alpha);

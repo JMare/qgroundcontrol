@@ -171,6 +171,57 @@ Item {
         property real freqMHz: 1800.0    // LTE typical: 700, 850, 900, 1800, 2100, 2600
         property real minDbm: -120.0
         property real maxDbm: -80.0
+        property real systemLoss_dB: 30.0
+
+        // Attitude inputs (degrees). Adjust to your actual vehicle properties if needed.
+        property real rollDeg:  vehicle1 && vehicle1.roll  ? vehicle1.roll.value  : 0.0
+        property real pitchDeg: vehicle1 && vehicle1.pitch ? vehicle1.pitch.value : 0.0
+        property real yawDeg:   vehicle1 && vehicle1.heading ? vehicle1.heading.value : 0.0
+
+        // Convert degrees -> radians
+        function deg2rad(d) { return d * Math.PI / 180.0; }
+
+        // Rotate a vector by roll/pitch/yaw (intrinsic ZYX: yaw, pitch, roll)
+        // Returns ENU axis assuming:
+        // - ENU axes: X=east, Y=north, Z=up
+        // - yaw about +Z (up), pitch about +Y, roll about +X
+        function rotateBodyAxisToENU(vx, vy, vz, rollR, pitchR, yawR) {
+            const cr = Math.cos(rollR),  sr = Math.sin(rollR);
+            const cp = Math.cos(pitchR), sp = Math.sin(pitchR);
+            const cy = Math.cos(yawR),   sy = Math.sin(yawR);
+
+            // Rz(yaw) * Ry(pitch) * Rx(roll) * v
+            const x1 = vx;
+            const y1 = cr * vy - sr * vz;
+            const z1 = sr * vy + cr * vz;
+
+            const x2 =  cp * x1 + sp * z1;
+            const y2 =  y1;
+            const z2 = -sp * x1 + cp * z1;
+
+            const x3 = cy * x2 - sy * y2;
+            const y3 = sy * x2 + cy * y2;
+            const z3 = z2;
+
+            return Qt.vector3d(x3, y3, z3);
+        }
+
+        // Body-frame antenna axis (choose this)
+        property vector3d antennaAxisBody: Qt.vector3d(0, 0, 1)
+
+        // ENU antenna axis (computed)
+        property vector3d antennaAxisENU: {
+            const r = deg2rad(rollDeg);
+            const p = deg2rad(pitchDeg);
+            const y = deg2rad(yawDeg);
+            return rotateBodyAxisToENU(antennaAxisBody.x, antennaAxisBody.y, antennaAxisBody.z, r, p, y);
+        }
+
+        // Pass to shader as floats (std140-friendly)
+        property real antAxisX: antennaAxisENU.x
+        property real antAxisY: antennaAxisENU.y
+        property real antAxisZ: antennaAxisENU.z
+
         // Safety: if the drone is not valid, hide (prevents NaN from nuking the shader)
         onDroneXChanged: {
             if (!isFinite(droneX) || !isFinite(droneY) || !isFinite(droneAlt)) {
