@@ -100,11 +100,10 @@ Item {
         id: shaderOverlay
         visible: false   // enabled by updateGeometry()
 
-        // Point to the new compiled shaders
-        fragmentShader: "qrc:/shaders/AltitudeColor.frag.qsb"
-        vertexShader:   "qrc:/shaders/AltitudeColor.vert.qsb"   // can also reuse AltitudeColor.vert.qsb if unchanged
+        fragmentShader: "qrc:/shaders/AltitudeColor.frag.qsb"   // (this should be your RadioLOS_Attitude.qsb)
+        vertexShader:   "qrc:/shaders/AltitudeColor.vert.qsb"
 
-        // --- Texture source (unchanged) ---
+        // --- Texture source ---
         property var heatmap: Image {
             id: heatmapImage
             source: "image://terrainoverlay/terrain?" + terrainOverlayRenderer.lastUpdateCounter
@@ -113,22 +112,24 @@ Item {
 
             onStatusChanged: {
                 if (status === Image.Ready) {
-                    // If the image changes size, recalc overlay placement
+                    console.log("✅ Heatmap ready:", width, "x", height,
+                                "terrainMin/Max:", shaderOverlay.terrainMinMeters, shaderOverlay.terrainMaxMeters)
                     terrainOverlay.updateGeometry()
                 }
             }
         }
 
-        // These remain for shader bindings
+        // Shader bindings
         property var source: heatmapImage
         property var altitudeTexture: heatmapImage
         property real gridCols: heatmapImage.width
         property real gridRows: heatmapImage.height
 
+        // Decode range for altitudeTexture (meters AMSL)
         property real terrainMinMeters: terrainOverlayRenderer.terrainMinMeters
         property real terrainMaxMeters: terrainOverlayRenderer.terrainMaxMeters
 
-        // --- Single drone (transmitter) ---
+        // --- Single drone ---
         property var vehicle1: QGroundControl.multiVehicleManager.vehicles.count > 0
             ? QGroundControl.multiVehicleManager.vehicles.get(0) : null
 
@@ -136,7 +137,7 @@ Item {
         property real droneLon: vehicle1 ? vehicle1.coordinate.longitude : NaN
         property real droneAlt: vehicle1 ? vehicle1.altitudeAMSL.value : 250.0
 
-        // --- Terrain bounds (unchanged) ---
+        // --- Terrain bounds (from GeoTIFF) ---
         property real minLat: terrainOverlayRenderer.minLat
         property real maxLat: terrainOverlayRenderer.maxLat
         property real minLon: terrainOverlayRenderer.minLon
@@ -155,40 +156,36 @@ Item {
             return (maxLat - droneLat) / latSpan * gridRows;
         }
 
+        // meters per pixel based on bounds and grid size (now TRUE native grid; no stretch)
         property real metersPerPixelX: {
-          const lat0 = (minLat + maxLat) * 0.5
-          const mPerDegLon = 111320.0 * Math.cos(lat0 * Math.PI/180.0)
-          return (maxLon - minLon) * mPerDegLon / gridCols
+            const lat0 = (minLat + maxLat) * 0.5
+            const mPerDegLon = 111320.0 * Math.cos(lat0 * Math.PI/180.0)
+            return (maxLon - minLon) * mPerDegLon / gridCols
         }
 
         property real metersPerPixelY: {
-          const mPerDegLat = 111320.0
-          return (maxLat - minLat) * mPerDegLat / gridRows
+            const mPerDegLat = 111320.0
+            return (maxLat - minLat) * mPerDegLat / gridRows
         }
 
-        property real freqMHz: 1800.0    // LTE typical: 700, 850, 900, 1800, 2100, 2600
+        // RF params
+        property real freqMHz: 1800.0
         property real minDbm: -120.0
         property real maxDbm: -80.0
         property real systemLoss_dB: 30.0
 
-        // Attitude inputs (degrees). Adjust to your actual vehicle properties if needed.
+        // Attitude inputs (degrees)
         property real rollDeg:  vehicle1 && vehicle1.roll  ? vehicle1.roll.value  : 0.0
         property real pitchDeg: vehicle1 && vehicle1.pitch ? vehicle1.pitch.value : 0.0
         property real yawDeg:   vehicle1 && vehicle1.heading ? vehicle1.heading.value : 0.0
 
-        // Convert degrees -> radians
         function deg2rad(d) { return d * Math.PI / 180.0; }
 
-        // Rotate a vector by roll/pitch/yaw (intrinsic ZYX: yaw, pitch, roll)
-        // Returns ENU axis assuming:
-        // - ENU axes: X=east, Y=north, Z=up
-        // - yaw about +Z (up), pitch about +Y, roll about +X
         function rotateBodyAxisToENU(vx, vy, vz, rollR, pitchR, yawR) {
             const cr = Math.cos(rollR),  sr = Math.sin(rollR);
             const cp = Math.cos(pitchR), sp = Math.sin(pitchR);
             const cy = Math.cos(yawR),   sy = Math.sin(yawR);
 
-            // Rz(yaw) * Ry(pitch) * Rx(roll) * v
             const x1 = vx;
             const y1 = cr * vy - sr * vz;
             const z1 = sr * vy + cr * vz;
@@ -204,10 +201,8 @@ Item {
             return Qt.vector3d(x3, y3, z3);
         }
 
-        // Body-frame antenna axis (choose this)
         property vector3d antennaAxisBody: Qt.vector3d(0, 0, 1)
 
-        // ENU antenna axis (computed)
         property vector3d antennaAxisENU: {
             const r = deg2rad(rollDeg);
             const p = deg2rad(pitchDeg);
@@ -215,16 +210,9 @@ Item {
             return rotateBodyAxisToENU(antennaAxisBody.x, antennaAxisBody.y, antennaAxisBody.z, r, p, y);
         }
 
-        // Pass to shader as floats (std140-friendly)
         property real antAxisX: antennaAxisENU.x
         property real antAxisY: antennaAxisENU.y
         property real antAxisZ: antennaAxisENU.z
-
-        // Safety: if the drone is not valid, hide (prevents NaN from nuking the shader)
-        onDroneXChanged: {
-            if (!isFinite(droneX) || !isFinite(droneY) || !isFinite(droneAlt)) {
-                // Let the outer updateGeometry decide visibility, but avoid spamming logs
-            }
-        }
     }
+
 }

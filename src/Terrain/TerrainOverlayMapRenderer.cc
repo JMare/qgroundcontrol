@@ -143,7 +143,7 @@ void TerrainOverlayMapRenderer::_generateHeatmapImage()
     double maxAlt = std::numeric_limits<double>::lowest();
     int nanCount = 0;
 
-            // Compute min/max altitude (meters) from the float grid
+            // Compute min/max altitude (meters)
     for (const QVariant& val : _altitudeGrid) {
         const double alt = val.toDouble();
         if (std::isnan(alt)) {
@@ -170,6 +170,7 @@ void TerrainOverlayMapRenderer::_generateHeatmapImage()
         maxAlt = minAlt + 1.0;
     }
 
+            // Store terrain min/max for shader decode (meters)
     const bool terrainRangeDidChange =
         !qFuzzyCompare(_terrainMinMeters + 1.0, minAlt + 1.0) ||
         !qFuzzyCompare(_terrainMaxMeters + 1.0, maxAlt + 1.0);
@@ -181,8 +182,6 @@ void TerrainOverlayMapRenderer::_generateHeatmapImage()
         emit terrainRangeChanged();
     }
 
-
-            // Debug prints: range + a few sample values
     qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Terrain altitude range (meters):"
                                  << "min =" << _terrainMinMeters
                                  << "max =" << _terrainMaxMeters
@@ -201,11 +200,11 @@ void TerrainOverlayMapRenderer::_generateHeatmapImage()
                                      << "a[last]=" << _altitudeGrid[idx2].toDouble();
     }
 
-            // Generate grayscale image (r=g=b) normalized across [minAlt, maxAlt]
-            // IMPORTANT: This image is ONLY a carrier; shader must decode using terrainMinMeters/terrainMaxMeters.
+            // Generate grayscale carrier image normalized across [minAlt, maxAlt]
+            // IMPORTANT: shader must decode back to meters using terrainMinMeters/terrainMaxMeters.
     const double invRange = 1.0 / (maxAlt - minAlt);
-
     int transparentCount = 0;
+
     for (int row = 0; row < _gridRows; ++row) {
         QRgb* scanline = reinterpret_cast<QRgb*>(rawImage.scanLine(row));
         for (int col = 0; col < _gridCols; ++col) {
@@ -224,56 +223,23 @@ void TerrainOverlayMapRenderer::_generateHeatmapImage()
         }
     }
 
-    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Heatmap carrier image generated:"
+    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Heatmap carrier image generated (NO STRETCH):"
                                  << "size:" << rawImage.size()
                                  << "transparent pixels (NaNs):" << transparentCount;
 
-            // Stretch image horizontally to match real-world aspect (existing behavior)
-    const double latSpan = _maxLat - _minLat;
-    const double lonSpan = _maxLon - _minLon;
-    const double cosLat = std::cos(qDegreesToRadians(_centerLat));
-
-    if (latSpan <= 0.0 || lonSpan <= 0.0 || cosLat <= 0.0) {
-        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Invalid spans for aspect correction."
-                                        << "latSpan:" << latSpan
-                                        << "lonSpan:" << lonSpan
-                                        << "cosLat:" << cosLat
-                                        << "Skipping stretch; using raw image.";
-        if (_imageProvider) {
-            _imageProvider->setImage(rawImage);
-        }
-        _computeOverlayNativeZoomLevel(rawImage.width(), rawImage.height());
-        _updateCounter++;
-        emit heatmapImageChanged();
+    if (_imageProvider) {
+        _imageProvider->setImage(rawImage);
+    } else {
+        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] No image provider set; cannot publish heatmap.";
         return;
     }
 
-    const double aspectCorrection = (lonSpan * cosLat) / latSpan;
-    const int stretchedWidth = std::max(1, static_cast<int>(std::round(_gridRows * aspectCorrection))); // keep height fixed
-
-    QImage stretchedImage(stretchedWidth, _gridRows, QImage::Format_ARGB32);
-    stretchedImage.fill(Qt::transparent);
-
-    {
-        QPainter p(&stretchedImage);
-        p.setRenderHint(QPainter::SmoothPixmapTransform, true);
-        p.drawImage(QRect(0, 0, stretchedWidth, _gridRows), rawImage);
-    }
-
-    if (_imageProvider) {
-        _imageProvider->setImage(stretchedImage);
-    }
-
-    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Final grayscale heatmap stretched:"
-                                 << stretchedImage.size()
-                                 << "(aspectCorrection:" << aspectCorrection
-                                 << "raw:" << rawImage.size() << ")";
-
-    _computeOverlayNativeZoomLevel(stretchedImage.width(), stretchedImage.height());
+    _computeOverlayNativeZoomLevel(rawImage.width(), rawImage.height());
 
     _updateCounter++;
     emit heatmapImageChanged();
 }
+
 
 
 void TerrainOverlayMapRenderer::_computeOverlayNativeZoomLevel(int imageWidth, int imageHeight)
