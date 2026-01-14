@@ -189,22 +189,13 @@ void TerrainOverlayMapRenderer::_generateHeatmapImage()
                                  << "NaNs =" << nanCount
                                  << "total =" << _altitudeGrid.size();
 
-    if (_altitudeGrid.size() >= 3) {
-        const int idx0 = 0;
-        const int idx1 = _altitudeGrid.size() / 2;
-        const int idx2 = _altitudeGrid.size() - 1;
-
-        qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Sample altitudes (raw float meters):"
-                                     << "a[0]=" << _altitudeGrid[idx0].toDouble()
-                                     << "a[mid]=" << _altitudeGrid[idx1].toDouble()
-                                     << "a[last]=" << _altitudeGrid[idx2].toDouble();
-    }
-
-            // Generate grayscale carrier image normalized across [minAlt, maxAlt]
-            // IMPORTANT: shader must decode back to meters using terrainMinMeters/terrainMaxMeters.
+            // Precompute for normalization
     const double invRange = 1.0 / (maxAlt - minAlt);
+
     int transparentCount = 0;
 
+            // Pack normalized altitude into 16-bit (0..65535), store in R (low) + G (high).
+            // B=0, A=255. NaNs -> transparent.
     for (int row = 0; row < _gridRows; ++row) {
         QRgb* scanline = reinterpret_cast<QRgb*>(rawImage.scanLine(row));
         for (int col = 0; col < _gridCols; ++col) {
@@ -218,14 +209,41 @@ void TerrainOverlayMapRenderer::_generateHeatmapImage()
             }
 
             const double norm = std::clamp((alt - minAlt) * invRange, 0.0, 1.0);
-            const int gray = static_cast<int>(norm * 255.0 + 0.5);
-            scanline[col] = qRgba(gray, gray, gray, 255);
+
+                    // Quantize to 16-bit (round to nearest)
+            const uint32_t q16 = static_cast<uint32_t>(std::lround(norm * 65535.0));
+            const int r = static_cast<int>(q16 & 0xFF);         // low byte
+            const int g = static_cast<int>((q16 >> 8) & 0xFF);  // high byte
+
+            scanline[col] = qRgba(r, g, 0, 255);
         }
     }
 
-    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Heatmap carrier image generated (NO STRETCH):"
+            // Debug: check a couple pixels encode plausibly (optional but useful)
+    auto debugPixel = [&](int x, int y) {
+        x = std::clamp(x, 0, _gridCols - 1);
+        y = std::clamp(y, 0, _gridRows - 1);
+        const QRgb px = rawImage.pixel(x, y);
+        const int r = qRed(px);
+        const int g = qGreen(px);
+        const int a = qAlpha(px);
+        const uint32_t q16 = static_cast<uint32_t>(r) + (static_cast<uint32_t>(g) << 8);
+        const double norm = static_cast<double>(q16) / 65535.0;
+        const double alt = minAlt + norm * (maxAlt - minAlt);
+        qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Packed sample pixel"
+                                     << "x=" << x << "y=" << y
+                                     << "RGBA=(" << r << g << qBlue(px) << a << ")"
+                                     << "q16=" << q16
+                                     << "decodedAlt~" << alt;
+    };
+
+    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Heatmap carrier image generated (16-bit RG pack):"
                                  << "size:" << rawImage.size()
                                  << "transparent pixels (NaNs):" << transparentCount;
+
+    debugPixel(0, 0);
+    debugPixel(_gridCols / 2, _gridRows / 2);
+    debugPixel(_gridCols - 1, _gridRows - 1);
 
     if (_imageProvider) {
         _imageProvider->setImage(rawImage);
@@ -239,7 +257,6 @@ void TerrainOverlayMapRenderer::_generateHeatmapImage()
     _updateCounter++;
     emit heatmapImageChanged();
 }
-
 
 
 void TerrainOverlayMapRenderer::_computeOverlayNativeZoomLevel(int imageWidth, int imageHeight)

@@ -49,9 +49,21 @@ float sampleTerrainAlt(float x, float y) {
     int sx = int(clamp(floor(x), 0.0, gridCols - 1.0));
     int sy = int(clamp(floor(y), 0.0, gridRows - 1.0));
     vec2 uv = (vec2(sx, sy) + 0.5) / vec2(gridCols, gridRows);
-    float gray = texture(altitudeTexture, uv).r;
-    return terrainMinMeters + gray * (terrainMaxMeters - terrainMinMeters);
+
+    vec4 tex = texture(altitudeTexture, uv);
+
+    // tex.r/tex.g are normalized 0..1, representing bytes 0..255.
+    // Convert back to 0..65535 and then to 0..1.
+    float r = tex.r * 255.0;
+    float g = tex.g * 255.0;
+
+    // Reconstruct q16. Add 0.5 to reduce off-by-one due to float rounding.
+    float q16 = floor(r + 0.5) + floor(g + 0.5) * 256.0;
+    float norm = q16 / 65535.0;
+
+    return terrainMinMeters + norm * (terrainMaxMeters - terrainMinMeters);
 }
+
 
 // LOS visibility along ray drone->frag. Returns 0..1.
 float computeVisibility(float fragX, float fragY) {
