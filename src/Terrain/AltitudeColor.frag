@@ -17,6 +17,9 @@ layout(std140, binding = 0) uniform buf {
     float gridCols;
     float gridRows;
 
+    float terrainMinMeters;
+    float terrainMaxMeters;
+
     // Pixel-to-meter scale (you added these in QML)
     float metersPerPixelX; // meters per pixel in +X (east / lon direction)
     float metersPerPixelY; // meters per pixel in +Y (north / lat direction)
@@ -42,15 +45,12 @@ float log10_safe(float x) {
     return log(max(x, 1e-30)) * 0.4342944819;
 }
 
-// Terrain decode: assumes your provider encodes altitude as gray*255.
-// If you actually normalize real meters into 0..1, replace this with
-// fragAlt = terrainMin + gray*(terrainMax-terrainMin).
 float sampleTerrainAlt(float x, float y) {
     int sx = int(clamp(floor(x), 0.0, gridCols - 1.0));
     int sy = int(clamp(floor(y), 0.0, gridRows - 1.0));
     vec2 uv = (vec2(sx, sy) + 0.5) / vec2(gridCols, gridRows);
     float gray = texture(altitudeTexture, uv).r;
-    return gray * 255.0;
+    return terrainMinMeters + gray * (terrainMaxMeters - terrainMinMeters);
 }
 
 // LOS visibility along ray drone->frag. Returns 0..1.

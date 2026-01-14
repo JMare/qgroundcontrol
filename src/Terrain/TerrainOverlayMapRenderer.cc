@@ -127,9 +127,13 @@ void TerrainOverlayMapRenderer::_computeBoundsFromGeoTransform(double* gt, int r
     emit boundsChanged();
 }
 
-void TerrainOverlayMapRenderer::_generateHeatmapImage() {
+void TerrainOverlayMapRenderer::_generateHeatmapImage()
+{
     if (_gridRows <= 0 || _gridCols <= 0 || _altitudeGrid.isEmpty()) {
-        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Invalid grid dimensions or altitude data.";
+        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Invalid grid dimensions or altitude data."
+                                        << "rows:" << _gridRows
+                                        << "cols:" << _gridCols
+                                        << "altitudeGrid empty:" << _altitudeGrid.isEmpty();
         return;
     }
 
@@ -137,65 +141,140 @@ void TerrainOverlayMapRenderer::_generateHeatmapImage() {
 
     double minAlt = std::numeric_limits<double>::max();
     double maxAlt = std::numeric_limits<double>::lowest();
+    int nanCount = 0;
 
+            // Compute min/max altitude (meters) from the float grid
     for (const QVariant& val : _altitudeGrid) {
-        double alt = val.toDouble();
-        if (!std::isnan(alt)) {
-            minAlt = std::min(minAlt, alt);
-            maxAlt = std::max(maxAlt, alt);
+        const double alt = val.toDouble();
+        if (std::isnan(alt)) {
+            nanCount++;
+            continue;
         }
+        minAlt = std::min(minAlt, alt);
+        maxAlt = std::max(maxAlt, alt);
     }
 
-    if (minAlt == maxAlt) {
-        maxAlt += 1.0; // avoid division by zero
+            // If everything was NaN, bail
+    if (minAlt == std::numeric_limits<double>::max() || maxAlt == std::numeric_limits<double>::lowest()) {
+        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] All altitude samples are NaN. Cannot build heatmap."
+                                        << "nanCount:" << nanCount
+                                        << "total:" << _altitudeGrid.size();
+        return;
     }
 
-    // 🔲 Generate grayscale image (r = g = b)
+            // Avoid division by zero / degenerate range
+    if (qFuzzyCompare(minAlt, maxAlt)) {
+        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Degenerate altitude range (min==max). Forcing +1m span."
+                                        << "minAlt:" << minAlt
+                                        << "maxAlt:" << maxAlt;
+        maxAlt = minAlt + 1.0;
+    }
+
+    const bool terrainRangeDidChange =
+        !qFuzzyCompare(_terrainMinMeters + 1.0, minAlt + 1.0) ||
+        !qFuzzyCompare(_terrainMaxMeters + 1.0, maxAlt + 1.0);
+
+    _terrainMinMeters = minAlt;
+    _terrainMaxMeters = maxAlt;
+
+    if (terrainRangeDidChange) {
+        emit terrainRangeChanged();
+    }
+
+
+            // Debug prints: range + a few sample values
+    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Terrain altitude range (meters):"
+                                 << "min =" << _terrainMinMeters
+                                 << "max =" << _terrainMaxMeters
+                                 << "range =" << (_terrainMaxMeters - _terrainMinMeters)
+                                 << "NaNs =" << nanCount
+                                 << "total =" << _altitudeGrid.size();
+
+    if (_altitudeGrid.size() >= 3) {
+        const int idx0 = 0;
+        const int idx1 = _altitudeGrid.size() / 2;
+        const int idx2 = _altitudeGrid.size() - 1;
+
+        qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Sample altitudes (raw float meters):"
+                                     << "a[0]=" << _altitudeGrid[idx0].toDouble()
+                                     << "a[mid]=" << _altitudeGrid[idx1].toDouble()
+                                     << "a[last]=" << _altitudeGrid[idx2].toDouble();
+    }
+
+            // Generate grayscale image (r=g=b) normalized across [minAlt, maxAlt]
+            // IMPORTANT: This image is ONLY a carrier; shader must decode using terrainMinMeters/terrainMaxMeters.
+    const double invRange = 1.0 / (maxAlt - minAlt);
+
+    int transparentCount = 0;
     for (int row = 0; row < _gridRows; ++row) {
+        QRgb* scanline = reinterpret_cast<QRgb*>(rawImage.scanLine(row));
         for (int col = 0; col < _gridCols; ++col) {
-            int idx = row * _gridCols + col;
-            double alt = _altitudeGrid[idx].toDouble();
+            const int idx = row * _gridCols + col;
+            const double alt = _altitudeGrid[idx].toDouble();
 
-            QColor color = Qt::transparent;
-            if (!std::isnan(alt)) {
-                double norm = std::clamp((alt - minAlt) / (maxAlt - minAlt), 0.0, 1.0);
-                int gray = static_cast<int>(norm * 255.0);
-                color = QColor(gray, gray, gray, 255);  // full opacity
+            if (std::isnan(alt)) {
+                scanline[col] = qRgba(0, 0, 0, 0);
+                transparentCount++;
+                continue;
             }
 
-            rawImage.setPixelColor(col, row, color);
+            const double norm = std::clamp((alt - minAlt) * invRange, 0.0, 1.0);
+            const int gray = static_cast<int>(norm * 255.0 + 0.5);
+            scanline[col] = qRgba(gray, gray, gray, 255);
         }
     }
 
-    // 2. Stretch image horizontally to match real-world aspect
-    double latSpan = _maxLat - _minLat;
-    double lonSpan = _maxLon - _minLon;
-    double cosLat = std::cos(qDegreesToRadians(_centerLat));
+    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Heatmap carrier image generated:"
+                                 << "size:" << rawImage.size()
+                                 << "transparent pixels (NaNs):" << transparentCount;
 
-    double aspectCorrection = lonSpan * cosLat / latSpan;
-    int stretchedWidth = std::round(_gridRows * aspectCorrection); // keep height fixed
+            // Stretch image horizontally to match real-world aspect (existing behavior)
+    const double latSpan = _maxLat - _minLat;
+    const double lonSpan = _maxLon - _minLon;
+    const double cosLat = std::cos(qDegreesToRadians(_centerLat));
+
+    if (latSpan <= 0.0 || lonSpan <= 0.0 || cosLat <= 0.0) {
+        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Invalid spans for aspect correction."
+                                        << "latSpan:" << latSpan
+                                        << "lonSpan:" << lonSpan
+                                        << "cosLat:" << cosLat
+                                        << "Skipping stretch; using raw image.";
+        if (_imageProvider) {
+            _imageProvider->setImage(rawImage);
+        }
+        _computeOverlayNativeZoomLevel(rawImage.width(), rawImage.height());
+        _updateCounter++;
+        emit heatmapImageChanged();
+        return;
+    }
+
+    const double aspectCorrection = (lonSpan * cosLat) / latSpan;
+    const int stretchedWidth = std::max(1, static_cast<int>(std::round(_gridRows * aspectCorrection))); // keep height fixed
 
     QImage stretchedImage(stretchedWidth, _gridRows, QImage::Format_ARGB32);
     stretchedImage.fill(Qt::transparent);
 
-    QPainter p(&stretchedImage);
-    p.setRenderHint(QPainter::SmoothPixmapTransform, true);
-    p.drawImage(QRect(0, 0, stretchedWidth, _gridRows), rawImage);
-    p.end();
+    {
+        QPainter p(&stretchedImage);
+        p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+        p.drawImage(QRect(0, 0, stretchedWidth, _gridRows), rawImage);
+    }
 
     if (_imageProvider) {
         _imageProvider->setImage(stretchedImage);
     }
 
     qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Final grayscale heatmap stretched:"
-                                  << stretchedImage.size()
-                                  << " (aspectCorrection:" << aspectCorrection << ")";
+                                 << stretchedImage.size()
+                                 << "(aspectCorrection:" << aspectCorrection
+                                 << "raw:" << rawImage.size() << ")";
 
     _computeOverlayNativeZoomLevel(stretchedImage.width(), stretchedImage.height());
 
     _updateCounter++;
     emit heatmapImageChanged();
 }
+
 
 void TerrainOverlayMapRenderer::_computeOverlayNativeZoomLevel(int imageWidth, int imageHeight)
 {

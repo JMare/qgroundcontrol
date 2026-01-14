@@ -23,6 +23,8 @@ class TerrainOverlayMapRenderer : public QObject
     Q_PROPERTY(double minLon READ minLon NOTIFY boundsChanged)
     Q_PROPERTY(double maxLat READ maxLat NOTIFY boundsChanged)
     Q_PROPERTY(double maxLon READ maxLon NOTIFY boundsChanged)
+    Q_PROPERTY(double terrainMinMeters READ terrainMinMeters NOTIFY terrainRangeChanged)
+    Q_PROPERTY(double terrainMaxMeters READ terrainMaxMeters NOTIFY terrainRangeChanged)
     Q_PROPERTY(double overlayNativeZoomLevel READ overlayNativeZoomLevel NOTIFY boundsChanged)
     Q_PROPERTY(int lastUpdateCounter READ lastUpdateCounter NOTIFY heatmapImageChanged)
     Q_PROPERTY(QVariantList altitudeGrid READ altitudeGrid NOTIFY gridDataChanged)  // NEW
@@ -40,6 +42,8 @@ public:
     int gridCols() const { return _gridCols; }
     double centerLat() const { return _centerLat; }
     double centerLon() const { return _centerLon; }
+    double terrainMinMeters() const { return _terrainMinMeters; }
+    double terrainMaxMeters() const { return _terrainMaxMeters; }
 
     static TerrainOverlayMapRenderer* instance();
     static void registerQmlTypes();
@@ -60,6 +64,7 @@ signals:
     void boundsChanged();
     void heatmapImageChanged();
     void gridDataChanged();  // NEW
+    void terrainRangeChanged();
 
 private:
     void _connectToManager();
@@ -82,4 +87,7 @@ private:
     int _updateCounter = 0;
 
     QVariantList _altitudeGrid;  // NEW
+
+    double _terrainMinMeters = 0.0;
+    double _terrainMaxMeters = 0.0;
 };

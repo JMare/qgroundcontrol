@@ -125,6 +125,9 @@ Item {
         property real gridCols: heatmapImage.width
         property real gridRows: heatmapImage.height
 
+        property real terrainMinMeters: terrainOverlayRenderer.terrainMinMeters
+        property real terrainMaxMeters: terrainOverlayRenderer.terrainMaxMeters
+
         // --- Single drone (transmitter) ---
         property var vehicle1: QGroundControl.multiVehicleManager.vehicles.count > 0
             ? QGroundControl.multiVehicleManager.vehicles.get(0) : null
@@ -162,11 +165,6 @@ Item {
           const mPerDegLat = 111320.0
           return (maxLat - minLat) * mPerDegLat / gridRows
         }
-
-
-        // --- RF tuning knobs (new) ---
-        // 1W as a relative scalar for now; later we’ll do proper dBm+FSPL
-        property real txPower: 0.0001
 
         property real freqMHz: 1800.0    // LTE typical: 700, 850, 900, 1800, 2100, 2600
         property real minDbm: -120.0
