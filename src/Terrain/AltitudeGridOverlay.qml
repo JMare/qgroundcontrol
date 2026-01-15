@@ -5,6 +5,7 @@ import QtLocation
 import QtPositioning
 
 import QGroundControl
+import QGroundControl.TerrainOverlayMapRenderer 1.0
 
 Item {
     id: terrainOverlay
@@ -15,12 +16,23 @@ Item {
     // Your C++ renderer object (TerrainOverlayMapRenderer)
     property var terrainOverlayRenderer
 
-    // Show only after first update / image is ready-ish
-    visible: terrainOverlayRenderer && terrainOverlayRenderer.lastUpdateCounter > 0
+    // Manual override for debug mode (0 means "auto")
+    // 0 = auto (state-driven), 1 = altitude grayscale, 2 = NaN mask
+    property real userDebugMode: 0.0
 
-    // This Item sits on top of the map viewport
-    // (FlightMap.qml's Map will usually size children to the map automatically,
-    // but anchors.fill is safer if you wrap this in an Item layer.)
+    // Auto-driven debugMode when userDebugMode==0:
+    // - if not ready -> show altitude grayscale (1)
+    // - if ready     -> normal RF (0)
+    readonly property real effectiveDebugMode: {
+        if (!terrainOverlayRenderer) return 1.0
+        if (userDebugMode !== 0.0) return userDebugMode
+        return (terrainOverlayRenderer.state === TerrainOverlayMapRenderer.Ready) ? 0.0 : 1.0
+    }
+
+    // Keep item alive once we have a renderer. We don't require an image yet.
+    // Geometry logic will hide shaderOverlay if bounds aren't valid.
+    visible: !!terrainOverlayRenderer
+
     anchors.fill: parent
 
     // --- Internal helpers ---
@@ -47,8 +59,6 @@ Item {
         const maxLon = terrainOverlayRenderer.maxLon
 
         // Project top-left and bottom-right into map item pixels
-        // NOTE: this is an axis-aligned rectangle in screen space.
-        // For north-up 2D maps (no rotation/tilt), this aligns very well.
         const topLeft     = map.fromCoordinate(QtPositioning.coordinate(maxLat, minLon), false)
         const bottomRight = map.fromCoordinate(QtPositioning.coordinate(minLat, maxLon), false)
 
@@ -57,7 +67,6 @@ Item {
         const w  = Math.abs(bottomRight.x - topLeft.x)
         const h  = Math.abs(bottomRight.y - topLeft.y)
 
-        // Avoid degenerate geometry
         if (!isFinite(x0) || !isFinite(y0) || !isFinite(w) || !isFinite(h) || w < 1 || h < 1) {
             shaderOverlay.visible = false
             return
@@ -87,10 +96,9 @@ Item {
     Connections {
         target: terrainOverlayRenderer
         function onLastUpdateCounterChanged() { terrainOverlay.updateGeometry() }
-        function onMinLatChanged() { terrainOverlay.updateGeometry() }
-        function onMaxLatChanged() { terrainOverlay.updateGeometry() }
-        function onMinLonChanged() { terrainOverlay.updateGeometry() }
-        function onMaxLonChanged() { terrainOverlay.updateGeometry() }
+        function onBoundsChanged()            { terrainOverlay.updateGeometry() }   // <— preferred
+        function onGridDataChanged()          { terrainOverlay.updateGeometry() }   // <— optional
+        function onStateChanged()             { terrainOverlay.updateGeometry() }   // <— if you add state
     }
 
     Component.onCompleted: updateGeometry()
@@ -100,20 +108,25 @@ Item {
         id: shaderOverlay
         visible: false   // enabled by updateGeometry()
 
-        fragmentShader: "qrc:/shaders/AltitudeColor.frag.qsb"   // (this should be your RadioLOS_Attitude.qsb)
+        fragmentShader: "qrc:/shaders/AltitudeColor.frag.qsb"   // your RadioLOS_Attitude.qsb
         vertexShader:   "qrc:/shaders/AltitudeColor.vert.qsb"
 
         // --- Texture source ---
+        // Keep this Image alive even if it isn't ready yet.
+        // It will update whenever lastUpdateCounter increments.
         property var heatmap: Image {
             id: heatmapImage
-            source: "image://terrainoverlay/terrain?" + terrainOverlayRenderer.lastUpdateCounter
+            source: terrainOverlayRenderer
+                ? ("image://terrainoverlay/terrain?" + terrainOverlayRenderer.lastUpdateCounter)
+                : ""
             visible: false
             cache: false
 
             onStatusChanged: {
                 if (status === Image.Ready) {
                     console.log("✅ Heatmap ready:", width, "x", height,
-                                "terrainMin/Max:", shaderOverlay.terrainMinMeters, shaderOverlay.terrainMaxMeters)
+                                "terrainMin/Max:", shaderOverlay.terrainMinMeters, shaderOverlay.terrainMaxMeters,
+                                "state:", terrainOverlayRenderer ? terrainOverlayRenderer.stateName : "n/a")
                     terrainOverlay.updateGeometry()
                 }
             }
@@ -122,12 +135,14 @@ Item {
         // Shader bindings
         property var source: heatmapImage
         property var altitudeTexture: heatmapImage
-        property real gridCols: heatmapImage.width
-        property real gridRows: heatmapImage.height
+
+        // IMPORTANT: drive these from renderer (not image), so uniforms are stable
+        property real gridCols: terrainOverlayRenderer ? terrainOverlayRenderer.gridCols : 0.0
+        property real gridRows: terrainOverlayRenderer ? terrainOverlayRenderer.gridRows : 0.0
 
         // Decode range for altitudeTexture (meters AMSL)
-        property real terrainMinMeters: terrainOverlayRenderer.terrainMinMeters
-        property real terrainMaxMeters: terrainOverlayRenderer.terrainMaxMeters
+        property real terrainMinMeters: terrainOverlayRenderer ? terrainOverlayRenderer.terrainMinMeters : 0.0
+        property real terrainMaxMeters: terrainOverlayRenderer ? terrainOverlayRenderer.terrainMaxMeters : 1.0
 
         // --- Single drone ---
         property var vehicle1: QGroundControl.multiVehicleManager.vehicles.count > 0
@@ -137,33 +152,35 @@ Item {
         property real droneLon: vehicle1 ? vehicle1.coordinate.longitude : NaN
         property real droneAlt: vehicle1 ? vehicle1.altitudeAMSL.value : 250.0
 
-        // --- Terrain bounds (from GeoTIFF) ---
-        property real minLat: terrainOverlayRenderer.minLat
-        property real maxLat: terrainOverlayRenderer.maxLat
-        property real minLon: terrainOverlayRenderer.minLon
-        property real maxLon: terrainOverlayRenderer.maxLon
+        // --- Terrain bounds ---
+        property real minLat: terrainOverlayRenderer ? terrainOverlayRenderer.minLat : 0.0
+        property real maxLat: terrainOverlayRenderer ? terrainOverlayRenderer.maxLat : 0.0
+        property real minLon: terrainOverlayRenderer ? terrainOverlayRenderer.minLon : 0.0
+        property real maxLon: terrainOverlayRenderer ? terrainOverlayRenderer.maxLon : 0.0
 
         // --- Mapping drone coords into raster pixel space ---
         property real droneX: {
             const lonSpan = maxLon - minLon;
-            if (!isFinite(droneLon) || droneLon < -180 || droneLon > 180 || lonSpan <= 0) return NaN;
+            if (!isFinite(droneLon) || droneLon < -180 || droneLon > 180 || lonSpan <= 0 || gridCols <= 1) return NaN;
             return (droneLon - minLon) / lonSpan * gridCols;
         }
 
         property real droneY: {
             const latSpan = maxLat - minLat;
-            if (!isFinite(droneLat) || droneLat < -90 || droneLat > 90 || latSpan <= 0) return NaN;
+            if (!isFinite(droneLat) || droneLat < -90 || droneLat > 90 || latSpan <= 0 || gridRows <= 1) return NaN;
             return (maxLat - droneLat) / latSpan * gridRows;
         }
 
-        // meters per pixel based on bounds and grid size (now TRUE native grid; no stretch)
+        // meters per pixel based on bounds and grid size
         property real metersPerPixelX: {
+            if (gridCols <= 1) return 1.0
             const lat0 = (minLat + maxLat) * 0.5
             const mPerDegLon = 111320.0 * Math.cos(lat0 * Math.PI/180.0)
             return (maxLon - minLon) * mPerDegLon / gridCols
         }
 
         property real metersPerPixelY: {
+            if (gridRows <= 1) return 1.0
             const mPerDegLat = 111320.0
             return (maxLat - minLat) * mPerDegLat / gridRows
         }
@@ -214,16 +231,23 @@ Item {
         property real antAxisY: antennaAxisENU.y
         property real antAxisZ: antennaAxisENU.z
 
-        // Debug toggle: 0 = normal RF, 1 = show altitude grayscale, 2 = show NaN mask
-        property real debugMode: 0.0
+        // Debug toggle:
+        // 0 = normal RF, 1 = show altitude grayscale, 2 = show NaN mask
+        // FINAL value is state-driven unless user overrides.
+        property real debugMode: terrainOverlay.effectiveDebugMode
 
         // Helpful range expansion for grayscale view (meters). If 0, uses terrainMin/Max.
         property real debugMinAlt: 0.0
         property real debugMaxAlt: 0.0
 
         Keys.onPressed: (e) => {
-            if (e.key === Qt.Key_D) shaderOverlay.debugMode = (shaderOverlay.debugMode + 1) % 3
+            if (e.key === Qt.Key_D) {
+                // Cycle manual override: 0(auto) -> 1 -> 2 -> 0(auto)
+                terrainOverlay.userDebugMode = (terrainOverlay.userDebugMode + 1) % 3
+                console.log("debug override now:", terrainOverlay.userDebugMode,
+                            "effective:", terrainOverlay.effectiveDebugMode,
+                            "state:", terrainOverlayRenderer ? terrainOverlayRenderer.stateName : "n/a")
+            }
         }
     }
-
 }
