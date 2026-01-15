@@ -195,7 +195,7 @@ void TerrainOverlayMapRenderer::_queueHomeCenteredRequest(const QGeoCoordinate& 
         _homeRequestQueued = false;
         _lastHomeUsed = home;
 
-        constexpr double kRadiusMeters = 2000.0; // tune
+        constexpr double kRadiusMeters = 2500.0; // tune
         _requestAroundCoordinateMeters(home, kRadiusMeters);
 
         _homeRequestCompleted = true;
