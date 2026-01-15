@@ -1,3 +1,4 @@
+// TerrainOverlayMapRenderer.cc
 /****************************************************************************
  *
  * (c) 2024 QGroundControl
@@ -7,20 +8,25 @@
  ****************************************************************************/
 
 #include "TerrainOverlayMapRenderer.h"
+
 #include "HeatmapImageProvider.h"
-
-#include <QVariant>
-#include <QVariantMap>
-#include <QtMath>
-#include <QtCore/qapplicationstatic.h>
-#include <qfileinfo.h>
+#include "TerrainTileManager.h"
+#include "TerrainQueryInterface.h"
 #include "QGCLoggingCategory.h"
+#include "SettingsManager.h"
+#include "FlightMapSettings.h"
+#include "ElevationMapProvider.h"
+#include "QGCMapUrlEngine.h"
 
-#include "gdal_priv.h"
-#include "cpl_conv.h"
+#include <QtCore/qapplicationstatic.h>
+#include <QTimer>
+#include <QImage>
+#include <QtMath>
+
+#include <algorithm>
+#include <limits>
 
 QGC_LOGGING_CATEGORY(TerrainOverlayMapLog, "qgc.terrainoverlay.maprenderer");
-
 Q_APPLICATION_STATIC(TerrainOverlayMapRenderer, _instance);
 
 TerrainOverlayMapRenderer* TerrainOverlayMapRenderer::instance()
@@ -34,17 +40,21 @@ void TerrainOverlayMapRenderer::registerQmlTypes()
         "QGroundControl.TerrainOverlayMapRenderer", 1, 0,
         "TerrainOverlayMapRenderer",
         "Reference only"
-    );
+        );
 }
 
 TerrainOverlayMapRenderer::TerrainOverlayMapRenderer(QObject* parent)
     : QObject(parent)
 {
-    qCDebug(TerrainOverlayMapLog) << "[MapRenderer] Initializing singleton.";
+    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Initializing singleton (QGC terrain mode).";
     setImageProvider(HeatmapImageProvider::instance());
 
-    GDALAllRegister();
-    loadGeoTiff("/home/james/Downloads/output_AW3D30_small.tif");
+            // Drive retries/prefetch off actual tile arrivals (NO recursive requestCarpet loops).
+    connect(TerrainTileManager::instance(), &TerrainTileManager::tileCached,
+            this, &TerrainOverlayMapRenderer::_onTileCached);
+
+            // Don’t do work inline during UI construction.
+    _requestStartupCarpet();
 }
 
 void TerrainOverlayMapRenderer::setImageProvider(HeatmapImageProvider* provider)
@@ -52,150 +62,360 @@ void TerrainOverlayMapRenderer::setImageProvider(HeatmapImageProvider* provider)
     _imageProvider = provider;
 }
 
-void TerrainOverlayMapRenderer::loadGeoTiff(const QString& filePath) {
-    QFileInfo file(filePath);
-    if (!file.exists()) {
-        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] GeoTIFF file does not exist:" << filePath;
-        return;
-    }
-
-    GDALDataset* dataset = static_cast<GDALDataset*>(GDALOpen(filePath.toUtf8().constData(), GA_ReadOnly));
-    if (!dataset) {
-        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Failed to open GeoTIFF:" << filePath;
-        return;
-    }
-
-    GDALRasterBand* band = dataset->GetRasterBand(1);
-    _gridCols = band->GetXSize();
-    _gridRows = band->GetYSize();
-
-    float* rasterData = new float[_gridCols * _gridRows];
-    if (band->RasterIO(GF_Read, 0, 0, _gridCols, _gridRows, rasterData, _gridCols, _gridRows, GDT_Float32, 0, 0) != CE_None) {
-        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Failed to read raster data.";
-        delete[] rasterData;
-        GDALClose(dataset);
-        return;
-    }
-
+void TerrainOverlayMapRenderer::clear()
+{
     _altitudeGrid.clear();
-    for (int i = 0; i < _gridCols * _gridRows; ++i) {
-        _altitudeGrid.append(rasterData[i]);
-    }
-    delete[] rasterData;
+    _gridRows = 0;
+    _gridCols = 0;
 
-    double geoTransform[6];
-    if (dataset->GetGeoTransform(geoTransform) == CE_None) {
-        qCInfo(TerrainOverlayMapLog) << "[MapRenderer] GeoTransform obtained:";
-        qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Origin (top-left): Lat =" << geoTransform[3] << " Lon =" << geoTransform[0];
-        qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Pixel Size: Width =" << geoTransform[1] << " Height =" << geoTransform[5];
-        _computeBoundsFromGeoTransform(geoTransform, _gridRows, _gridCols);
-    } else {
-        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Failed to get GeoTransform.";
-    }
+    _terrainMinMeters = 0.0;
+    _terrainMaxMeters = 0.0;
+    emit terrainRangeChanged();
 
-    GDALClose(dataset);
+    _overlayNativeZoomLevel = 0.0;
+    emit boundsChanged();
 
+    _updateCounter++;
     emit gridDataChanged();
-    _generateHeatmapImage();
+    emit heatmapImageChanged();
+
+    if (_imageProvider) {
+        _imageProvider->setImage(QImage());
+    }
+
+            // Reset request/prefetch state
+    _carpetRequestInFlight = false;
+    _lastCarpetKey.clear();
+
+    _retryCount = 0;
+    _lastNanCount = -1;
+    _stableNanCountHits = 0;
+    _retryScheduled = false;
+
+    _prefetchActive = false;
+    _prefetchProbeQueue.clear();
+
+    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Cleared overlay.";
 }
 
-void TerrainOverlayMapRenderer::_computeBoundsFromGeoTransform(double* gt, int rows, int cols) {
-    const double originLon = gt[0];    // top-left pixel center X
-    const double originLat = gt[3];    // top-left pixel center Y
-    const double pixelWidth = gt[1];   // X pixel size
-    const double pixelHeight = gt[5];  // Y pixel size (usually negative)
-
-    // Adjust by -0.5 to get top-left *corner*, and +cols/rows to get full bounds
-    const double minLon = originLon - pixelWidth * 0.5;
-    const double maxLon = originLon + pixelWidth * (cols - 0.5);
-    const double maxLat = originLat - pixelHeight * 0.5;
-    const double minLat = originLat + pixelHeight * (rows - 0.5);
-
+void TerrainOverlayMapRenderer::_setBounds(double minLat, double maxLat, double minLon, double maxLon)
+{
     _minLat = std::min(minLat, maxLat);
     _maxLat = std::max(minLat, maxLat);
     _minLon = std::min(minLon, maxLon);
     _maxLon = std::max(minLon, maxLon);
-
-    _centerLat = (_minLat + _maxLat) / 2.0;
-    _centerLon = (_minLon + _maxLon) / 2.0;
-
-    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Adjusted bounds based on pixel edges:";
-    qCInfo(TerrainOverlayMapLog) << "  Lat: [" << _minLat << ", " << _maxLat << "]";
-    qCInfo(TerrainOverlayMapLog) << "  Lon: [" << _minLon << ", " << _maxLon << "]";
-    qCInfo(TerrainOverlayMapLog) << "  Center: " << _centerLat << "," << _centerLon;
+    _centerLat = (_minLat + _maxLat) * 0.5;
+    _centerLon = (_minLon + _maxLon) * 0.5;
 
     emit boundsChanged();
+
+    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Bounds set:"
+                                 << "Lat[" << _minLat << "," << _maxLat << "]"
+                                 << "Lon[" << _minLon << "," << _maxLon << "]"
+                                 << "Center" << _centerLat << _centerLon;
+}
+
+QString TerrainOverlayMapRenderer::_makeBoundsKey(double minLat, double maxLat, double minLon, double maxLon)
+{
+    const double aMinLat = std::min(minLat, maxLat);
+    const double aMaxLat = std::max(minLat, maxLat);
+    const double aMinLon = std::min(minLon, maxLon);
+    const double aMaxLon = std::max(minLon, maxLon);
+
+    return QString::number(aMinLat, 'f', 6) + "," +
+           QString::number(aMaxLat, 'f', 6) + "," +
+           QString::number(aMinLon, 'f', 6) + "," +
+           QString::number(aMaxLon, 'f', 6);
+}
+
+void TerrainOverlayMapRenderer::requestCarpet(double minLat, double maxLat, double minLon, double maxLon, bool statsOnly)
+{
+    if (minLat == maxLat || minLon == maxLon) {
+        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] requestCarpet degenerate bounds."
+                                        << "minLat/maxLat/minLon/maxLon" << minLat << maxLat << minLon << maxLon;
+        return;
+    }
+
+    const QString key = _makeBoundsKey(minLat, maxLat, minLon, maxLon);
+
+            // Dedupe exact same request while in-flight
+    if (_carpetRequestInFlight && key == _lastCarpetKey) {
+        qCDebug(TerrainOverlayMapLog) << "[MapRenderer] requestCarpet duplicate/in-flight ignored:" << key;
+        return;
+    }
+
+    _carpetRequestInFlight = true;
+    _lastCarpetKey = key;
+
+            // New request resets retry heuristics
+    _retryCount = 0;
+    _lastNanCount = -1;
+    _stableNanCountHits = 0;
+
+    _setBounds(minLat, maxLat, minLon, maxLon);
+
+    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Requesting terrain carpet (cache-first): key=" << key
+                                 << "Lat[" << _minLat << "," << _maxLat << "]"
+                                 << "Lon[" << _minLon << "," << _maxLon << "]";
+
+            // Cache-first pipeline (no recursion, no “prefetch complete” loops)
+    _tryBuildFromCacheOrPrefetch(statsOnly);
+
+            // Mark as not “in-flight” from UI standpoint after we attempted cache-first.
+            // Future updates are tile-driven.
+    _carpetRequestInFlight = false;
+}
+
+void TerrainOverlayMapRenderer::_tryBuildFromCacheOrPrefetch(bool statsOnly)
+{
+    Q_UNUSED(statsOnly);
+
+    int rows = 0, cols = 0;
+    double cellLat = 0.0, cellLon = 0.0;
+    double minH = 0.0, maxH = 0.0;
+    QList<float> grid;
+    bool needsDownload = false;
+
+    const bool ok = TerrainTileManager::instance()->getCarpetForBoundsFromCache(
+        _minLat, _maxLat, _minLon, _maxLon,
+        rows, cols,
+        cellLat, cellLon,
+        minH, maxH,
+        grid,
+        needsDownload
+        );
+
+    if (!ok) {
+        qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Cache miss for carpet; starting prefetch: key=" << _lastCarpetKey;
+        _startPrefetchForCurrentBounds();
+        return;
+    }
+
+            // Convert to QVariantList grid (row-major already)
+    _gridRows = rows;
+    _gridCols = cols;
+
+    _altitudeGrid.clear();
+    _altitudeGrid.reserve(_gridRows * _gridCols);
+
+    int nanCount = 0;
+    for (float v : grid) {
+        if (std::isnan(v)) nanCount++;
+        _altitudeGrid.append(static_cast<double>(v));
+    }
+
+            // Range props (tile stitch stats)
+    const bool rangeChanged =
+        !qFuzzyCompare(_terrainMinMeters + 1.0, minH + 1.0) ||
+        !qFuzzyCompare(_terrainMaxMeters + 1.0, maxH + 1.0);
+
+    _terrainMinMeters = minH;
+    _terrainMaxMeters = maxH;
+    if (rangeChanged) emit terrainRangeChanged();
+
+    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Carpet grid ready from cache:"
+                                 << _gridCols << "x" << _gridRows
+                                 << "min=" << _terrainMinMeters
+                                 << "max=" << _terrainMaxMeters
+                                 << "NaNs=" << nanCount
+                                 << "needsDownload=" << needsDownload;
+
+            // Stop infinite retries if NaNs aren’t improving.
+    if (_lastNanCount == nanCount) {
+        _stableNanCountHits++;
+    } else {
+        _stableNanCountHits = 0;
+    }
+    _lastNanCount = nanCount;
+
+            // Publish what we have (even if partial)
+    emit gridDataChanged();
+    _generateHeatmapImage();
+    _debugCarpetSummary_5pt();
+
+            // If partial, prefetch more — but DO NOT re-request immediately.
+    if (needsDownload) {
+        if (_stableNanCountHits >= 3) {
+            qCInfo(TerrainOverlayMapLog) << "[MapRenderer] NaNs not improving; stopping retries."
+                                         << "nanCount=" << nanCount << "stableHits=" << _stableNanCountHits;
+            return;
+        }
+        if (_retryCount >= _maxRetries) {
+            qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Retry cap reached; stopping."
+                                         << "retryCount=" << _retryCount << "nanCount=" << nanCount;
+            return;
+        }
+
+        _retryCount++;
+        qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Carpet partial coverage; prefetching more tiles:"
+                                     << "retry=" << _retryCount << "/" << _maxRetries
+                                     << "key=" << _lastCarpetKey;
+        _startPrefetchForCurrentBounds();
+    }
+}
+
+void TerrainOverlayMapRenderer::_onTileCached(const QString& /*hash*/)
+{
+    // If we’re prefetching, continue draining the queue.
+    if (_prefetchActive) {
+        _kickPrefetch();
+    }
+
+            // Debounced retry (prevents “spam new heatmap ready”)
+    _scheduleRetryDebounced();
+}
+
+void TerrainOverlayMapRenderer::_scheduleRetryDebounced()
+{
+    if (_retryScheduled) return;
+    if (_lastCarpetKey.isEmpty()) return;
+
+    _retryScheduled = true;
+    QTimer::singleShot(60, this, [this]() {
+        _retryScheduled = false;
+
+                // If no bounds set, ignore
+        if (_maxLat == _minLat || _maxLon == _minLon) return;
+
+        qCDebug(TerrainOverlayMapLog) << "[MapRenderer] tileCached -> retry cache-first build: key=" << _lastCarpetKey;
+        _tryBuildFromCacheOrPrefetch(false);
+    });
+}
+
+void TerrainOverlayMapRenderer::_startPrefetchForCurrentBounds()
+{
+    // Build probe queue for all tiles in AOI.
+    // We’ll probe one coordinate per tile (tile center). TerrainTileManager downloads one tile at a time.
+    const QString elevationProviderName =
+        SettingsManager::instance()->flightMapSettings()->elevationMapProvider()->rawValue().toString();
+    const SharedMapProvider provider = UrlFactory::getMapProviderFromProviderType(elevationProviderName);
+
+    if (!provider) {
+        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] No elevation provider configured.";
+        return;
+    }
+
+            // Compute tile ranges at “zoom 1” (provider ignores z for Copernicus anyway)
+    const int z = 1;
+    const int x0 = provider->long2tileX(_minLon, z);
+    const int x1 = provider->long2tileX(_maxLon, z);
+    const int y0 = provider->lat2tileY(_minLat, z);
+    const int y1 = provider->lat2tileY(_maxLat, z);
+
+    const int xMin = std::min(x0, x1);
+    const int xMax = std::max(x0, x1);
+    const int yMin = std::min(y0, y1);
+    const int yMax = std::max(y0, y1);
+
+            // If already prefetching, don’t rebuild the queue endlessly.
+    if (_prefetchActive && !_prefetchProbeQueue.isEmpty()) {
+        return;
+    }
+
+    _prefetchProbeQueue.clear();
+
+            // Probe tile centers in a stable order (row-major)
+    for (int y = yMin; y <= yMax; ++y) {
+        for (int x = xMin; x <= xMax; ++x) {
+            // Reconstruct approximate tile bounds from x/y using Copernicus constants:
+            // Tile size degrees is 0.01; long2tileX/lat2tileY defined as floor((lon+180)/tileSize), floor((lat+90)/tileSize)
+            // So tile SW = (y*tileSize - 90, x*tileSize - 180), NE = ((y+1)*tileSize - 90, (x+1)*tileSize - 180)
+            constexpr double tileSize = 0.01;
+            const double swLat = (static_cast<double>(y) * tileSize) - 90.0;
+            const double swLon = (static_cast<double>(x) * tileSize) - 180.0;
+            const double neLat = (static_cast<double>(y + 1) * tileSize) - 90.0;
+            const double neLon = (static_cast<double>(x + 1) * tileSize) - 180.0;
+
+            const double cLat = (swLat + neLat) * 0.5;
+            const double cLon = (swLon + neLon) * 0.5;
+
+            _prefetchProbeQueue.enqueue(QGeoCoordinate(cLat, cLon));
+        }
+    }
+
+    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Prefetch start:"
+                                 << "tiles=" << _prefetchProbeQueue.size()
+                                 << "x[" << xMin << "," << xMax << "]"
+                                 << "y[" << yMin << "," << yMax << "]";
+
+    _prefetchActive = true;
+    _kickPrefetch();
+}
+
+void TerrainOverlayMapRenderer::_kickPrefetch()
+{
+    if (!_prefetchActive) return;
+
+            // Drain any coords that are already cached; stop when we schedule a download.
+    while (!_prefetchProbeQueue.isEmpty()) {
+        const QGeoCoordinate c = _prefetchProbeQueue.dequeue();
+
+        bool error = false;
+        QList<double> alts;
+        const QList<QGeoCoordinate> one{c};
+
+        const bool gotNow = TerrainTileManager::instance()->getAltitudesForCoordinates(one, alts, error);
+
+        if (error) {
+            qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Prefetch probe error at" << c;
+            continue;
+        }
+
+        if (!gotNow) {
+            // Download was queued; we will continue when tileCached fires.
+            return;
+        }
+
+                // gotNow==true means tile was already cached (or just became available), keep draining.
+    }
+
+            // Queue drained
+    _prefetchActive = false;
+    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Prefetch queue drained.";
 }
 
 void TerrainOverlayMapRenderer::_generateHeatmapImage()
 {
     if (_gridRows <= 0 || _gridCols <= 0 || _altitudeGrid.isEmpty()) {
-        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Invalid grid dimensions or altitude data."
+        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Invalid grid for heatmap generation."
                                         << "rows:" << _gridRows
                                         << "cols:" << _gridCols
-                                        << "altitudeGrid empty:" << _altitudeGrid.isEmpty();
+                                        << "empty:" << _altitudeGrid.isEmpty();
+        return;
+    }
+    if (!_imageProvider) {
+        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] No image provider set; cannot publish heatmap.";
         return;
     }
 
-    QImage rawImage(_gridCols, _gridRows, QImage::Format_ARGB32);
+    double minAlt = _terrainMinMeters;
+    double maxAlt = _terrainMaxMeters;
 
-    double minAlt = std::numeric_limits<double>::max();
-    double maxAlt = std::numeric_limits<double>::lowest();
-    int nanCount = 0;
-
-            // Compute min/max altitude (meters)
-    for (const QVariant& val : _altitudeGrid) {
-        const double alt = val.toDouble();
-        if (std::isnan(alt)) {
-            nanCount++;
-            continue;
+    const bool rangeLooksValid = std::isfinite(minAlt) && std::isfinite(maxAlt) && (maxAlt > minAlt);
+    if (!rangeLooksValid) {
+        minAlt = std::numeric_limits<double>::max();
+        maxAlt = std::numeric_limits<double>::lowest();
+        for (const QVariant& v : _altitudeGrid) {
+            const double a = v.toDouble();
+            if (std::isnan(a)) continue;
+            minAlt = std::min(minAlt, a);
+            maxAlt = std::max(maxAlt, a);
         }
-        minAlt = std::min(minAlt, alt);
-        maxAlt = std::max(maxAlt, alt);
-    }
-
-            // If everything was NaN, bail
-    if (minAlt == std::numeric_limits<double>::max() || maxAlt == std::numeric_limits<double>::lowest()) {
-        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] All altitude samples are NaN. Cannot build heatmap."
-                                        << "nanCount:" << nanCount
-                                        << "total:" << _altitudeGrid.size();
-        return;
-    }
-
-            // Avoid division by zero / degenerate range
-    if (qFuzzyCompare(minAlt, maxAlt)) {
-        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Degenerate altitude range (min==max). Forcing +1m span."
-                                        << "minAlt:" << minAlt
-                                        << "maxAlt:" << maxAlt;
-        maxAlt = minAlt + 1.0;
-    }
-
-            // Store terrain min/max for shader decode (meters)
-    const bool terrainRangeDidChange =
-        !qFuzzyCompare(_terrainMinMeters + 1.0, minAlt + 1.0) ||
-        !qFuzzyCompare(_terrainMaxMeters + 1.0, maxAlt + 1.0);
-
-    _terrainMinMeters = minAlt;
-    _terrainMaxMeters = maxAlt;
-
-    if (terrainRangeDidChange) {
+        if (minAlt == std::numeric_limits<double>::max() || maxAlt == std::numeric_limits<double>::lowest()) {
+            qCWarning(TerrainOverlayMapLog) << "[MapRenderer] All samples NaN; cannot build heatmap.";
+            return;
+        }
+        if (qFuzzyCompare(minAlt, maxAlt)) maxAlt = minAlt + 1.0;
+        _terrainMinMeters = minAlt;
+        _terrainMaxMeters = maxAlt;
         emit terrainRangeChanged();
     }
 
-    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Terrain altitude range (meters):"
-                                 << "min =" << _terrainMinMeters
-                                 << "max =" << _terrainMaxMeters
-                                 << "range =" << (_terrainMaxMeters - _terrainMinMeters)
-                                 << "NaNs =" << nanCount
-                                 << "total =" << _altitudeGrid.size();
-
-            // Precompute for normalization
     const double invRange = 1.0 / (maxAlt - minAlt);
 
+    QImage rawImage(_gridCols, _gridRows, QImage::Format_ARGB32);
     int transparentCount = 0;
 
-            // Pack normalized altitude into 16-bit (0..65535), store in R (low) + G (high).
-            // B=0, A=255. NaNs -> transparent.
     for (int row = 0; row < _gridRows; ++row) {
         QRgb* scanline = reinterpret_cast<QRgb*>(rawImage.scanLine(row));
         for (int col = 0; col < _gridCols; ++col) {
@@ -209,100 +429,155 @@ void TerrainOverlayMapRenderer::_generateHeatmapImage()
             }
 
             const double norm = std::clamp((alt - minAlt) * invRange, 0.0, 1.0);
-
-                    // Quantize to 16-bit (round to nearest)
             const uint32_t q16 = static_cast<uint32_t>(std::lround(norm * 65535.0));
-            const int r = static_cast<int>(q16 & 0xFF);         // low byte
-            const int g = static_cast<int>((q16 >> 8) & 0xFF);  // high byte
-
+            const int r = static_cast<int>(q16 & 0xFF);
+            const int g = static_cast<int>((q16 >> 8) & 0xFF);
             scanline[col] = qRgba(r, g, 0, 255);
         }
     }
 
-            // Debug: check a couple pixels encode plausibly (optional but useful)
-    auto debugPixel = [&](int x, int y) {
-        x = std::clamp(x, 0, _gridCols - 1);
-        y = std::clamp(y, 0, _gridRows - 1);
-        const QRgb px = rawImage.pixel(x, y);
-        const int r = qRed(px);
-        const int g = qGreen(px);
-        const int a = qAlpha(px);
-        const uint32_t q16 = static_cast<uint32_t>(r) + (static_cast<uint32_t>(g) << 8);
-        const double norm = static_cast<double>(q16) / 65535.0;
-        const double alt = minAlt + norm * (maxAlt - minAlt);
-        qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Packed sample pixel"
-                                     << "x=" << x << "y=" << y
-                                     << "RGBA=(" << r << g << qBlue(px) << a << ")"
-                                     << "q16=" << q16
-                                     << "decodedAlt~" << alt;
-    };
+    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Heatmap carrier generated:"
+                                 << "size=" << rawImage.size()
+                                 << "transparent(NaN)=" << transparentCount
+                                 << "range(m)=" << minAlt << "to" << maxAlt;
 
-    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Heatmap carrier image generated (16-bit RG pack):"
-                                 << "size:" << rawImage.size()
-                                 << "transparent pixels (NaNs):" << transparentCount;
-
-    debugPixel(0, 0);
-    debugPixel(_gridCols / 2, _gridRows / 2);
-    debugPixel(_gridCols - 1, _gridRows - 1);
-
-    if (_imageProvider) {
-        _imageProvider->setImage(rawImage);
-    } else {
-        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] No image provider set; cannot publish heatmap.";
-        return;
-    }
-
+    _imageProvider->setImage(rawImage);
     _computeOverlayNativeZoomLevel(rawImage.width(), rawImage.height());
 
     _updateCounter++;
     emit heatmapImageChanged();
 }
 
-
 void TerrainOverlayMapRenderer::_computeOverlayNativeZoomLevel(int imageWidth, int imageHeight)
 {
     if (imageWidth <= 0 || imageHeight <= 0) {
-        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Invalid image size for zoom level computation.";
         _overlayNativeZoomLevel = 0.0;
+        emit boundsChanged();
         return;
     }
 
-    // Compute real world size in meters
     QGeoCoordinate topLeft(_maxLat, _minLon);
     QGeoCoordinate topRight(_maxLat, _maxLon);
     QGeoCoordinate bottomLeft(_minLat, _minLon);
 
-    double realWidthMeters = topLeft.distanceTo(topRight);
-    double realHeightMeters = topLeft.distanceTo(bottomLeft);
+    const double realWidthMeters = topLeft.distanceTo(topRight);
+    const double realHeightMeters = topLeft.distanceTo(bottomLeft);
 
     if (realWidthMeters <= 0.0 || realHeightMeters <= 0.0) {
-        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Invalid real-world size. width:" << realWidthMeters << " height:" << realHeightMeters;
         _overlayNativeZoomLevel = 0.0;
+        emit boundsChanged();
         return;
     }
 
-    // Calculate average meters per pixel
-    double metersPerPixelX = realWidthMeters / imageWidth;
-    double metersPerPixelY = realHeightMeters / imageHeight;
-    double avgMetersPerPixel = (metersPerPixelX + metersPerPixelY) / 2.0;
+    const double metersPerPixelX = realWidthMeters / imageWidth;
+    const double metersPerPixelY = realHeightMeters / imageHeight;
+    const double avgMetersPerPixel = (metersPerPixelX + metersPerPixelY) * 0.5;
 
-    // Calculate zoom level using Web Mercator formula
-    constexpr double earthCircumference = 40075016.686; // meters
+    constexpr double earthCircumference = 40075016.686;
     constexpr double tileSize = 256.0;
 
-    double centerLat = (_minLat + _maxLat) / 2.0;
-    double cosLat = std::cos(qDegreesToRadians(centerLat));
+    const double cosLat = std::cos(qDegreesToRadians(_centerLat));
     if (cosLat <= 0.0) {
-        qCWarning(TerrainOverlayMapLog) << "[MapRenderer] Invalid center latitude:" << centerLat;
         _overlayNativeZoomLevel = 0.0;
+        emit boundsChanged();
         return;
     }
 
-    double zoom = std::log2((earthCircumference * cosLat) / (avgMetersPerPixel * tileSize));
-    _overlayNativeZoomLevel = zoom;
+    _overlayNativeZoomLevel = std::log2((earthCircumference * cosLat) / (avgMetersPerPixel * tileSize));
 
-    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Computed native zoom level:" << zoom
-                                  << "(centerLat:" << centerLat << ", avgMetersPerPixel:" << avgMetersPerPixel << ")";
+    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] overlayNativeZoomLevel="
+                                 << _overlayNativeZoomLevel
+                                 << "avgMetersPerPixel=" << avgMetersPerPixel
+                                 << "centerLat=" << _centerLat;
 
     emit boundsChanged();
+}
+
+void TerrainOverlayMapRenderer::_requestStartupCarpet()
+{
+    if (_startupCarpetRequested) return;
+    _startupCarpetRequested = true;
+
+            // Your test bounds
+    const double minLat = -28.83-0.05;
+    const double maxLat = -28.78-0.05;
+    const double minLon = 153.24-0.05;
+    const double maxLon = 153.30-0.05;
+
+    QTimer::singleShot(0, this, [this, minLat, maxLat, minLon, maxLon]() {
+        qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Startup carpet request (C++ queued):"
+                                     << _makeBoundsKey(minLat, maxLat, minLon, maxLon);
+        requestCarpet(minLat, maxLat, minLon, maxLon, false);
+    });
+}
+
+int TerrainOverlayMapRenderer::_clampInt(int v, int lo, int hi)
+{
+    return std::max(lo, std::min(v, hi));
+}
+
+double TerrainOverlayMapRenderer::_carpetValueAt(int row, int col) const
+{
+    if (_gridRows <= 0 || _gridCols <= 0) return qQNaN();
+    row = _clampInt(row, 0, _gridRows - 1);
+    col = _clampInt(col, 0, _gridCols - 1);
+    const int idx = row * _gridCols + col;
+    if (idx < 0 || idx >= _altitudeGrid.size()) return qQNaN();
+    return _altitudeGrid[idx].toDouble();
+}
+
+void TerrainOverlayMapRenderer::_debugCarpetSummary_5pt() const
+{
+    if (_gridRows <= 0 || _gridCols <= 0 || _altitudeGrid.isEmpty()) {
+        qCWarning(TerrainOverlayMapLog) << "[Probe] No carpet grid to summarize.";
+        return;
+    }
+
+    double minAlt = std::numeric_limits<double>::max();
+    double maxAlt = std::numeric_limits<double>::lowest();
+    int nanCount = 0;
+
+    for (const QVariant& v : _altitudeGrid) {
+        const double a = v.toDouble();
+        if (std::isnan(a)) { nanCount++; continue; }
+        minAlt = std::min(minAlt, a);
+        maxAlt = std::max(maxAlt, a);
+    }
+
+    if (minAlt == std::numeric_limits<double>::max() ||
+        maxAlt == std::numeric_limits<double>::lowest()) {
+        qCWarning(TerrainOverlayMapLog) << "[Probe] All values NaN.";
+        return;
+    }
+
+    const int rTop = 0;
+    const int rBot = _gridRows - 1;
+    const int cLeft = 0;
+    const int cRight = _gridCols - 1;
+    const int rMid = _gridRows / 2;
+    const int cMid = _gridCols / 2;
+
+    const double altNW = _carpetValueAt(rTop, cLeft);
+    const double altNE = _carpetValueAt(rTop, cRight);
+    const double altSW = _carpetValueAt(rBot, cLeft);
+    const double altSE = _carpetValueAt(rBot, cRight);
+    const double altC  = _carpetValueAt(rMid, cMid);
+
+    qCInfo(TerrainOverlayMapLog) << "[Probe] Carpet summary:"
+                                 << "grid=" << _gridCols << "x" << _gridRows
+                                 << "min=" << minAlt
+                                 << "max=" << maxAlt
+                                 << "NaNs=" << nanCount;
+
+    qCInfo(TerrainOverlayMapLog) << "[Probe] 5pt:"
+                                 << "NW(r0,c0)=" << altNW
+                                 << "NE(r0,cMax)=" << altNE
+                                 << "SW(rMax,c0)=" << altSW
+                                 << "SE(rMax,cMax)=" << altSE
+                                 << "C(rMid,cMid)=" << altC;
+
+    qCInfo(TerrainOverlayMapLog) << "[Probe] Bounds:"
+                                 << "Lat[" << _minLat << "," << _maxLat << "]"
+                                 << "Lon[" << _minLon << "," << _maxLon << "]"
+                                 << "Center" << _centerLat << _centerLon;
 }

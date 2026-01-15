@@ -213,6 +213,17 @@ Item {
         property real antAxisX: antennaAxisENU.x
         property real antAxisY: antennaAxisENU.y
         property real antAxisZ: antennaAxisENU.z
+
+        // Debug toggle: 0 = normal RF, 1 = show altitude grayscale, 2 = show NaN mask
+        property real debugMode: 0.0
+
+        // Helpful range expansion for grayscale view (meters). If 0, uses terrainMin/Max.
+        property real debugMinAlt: 0.0
+        property real debugMaxAlt: 0.0
+
+        Keys.onPressed: (e) => {
+            if (e.key === Qt.Key_D) shaderOverlay.debugMode = (shaderOverlay.debugMode + 1) % 3
+        }
     }
 
 }

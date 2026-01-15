@@ -12,6 +12,7 @@
 
 #include <QtCore/QtNumeric>
 #include <QtPositioning/QGeoCoordinate>
+#include <cmath>        // std::isfinite
 
 QGC_LOGGING_CATEGORY(TerrainTileLog, "qgc.terrain.terraintile");
 
@@ -55,7 +56,9 @@ TerrainTile::TerrainTile(const QByteArray &byteArray)
     }
 
     int valueIndex = 0;
-    const int16_t* const pTileData = reinterpret_cast<const int16_t*>(&reinterpret_cast<const uint8_t*>(byteArray.constData())[cTileHeaderBytes]);
+    const int16_t* const pTileData =
+        reinterpret_cast<const int16_t*>(&reinterpret_cast<const uint8_t*>(byteArray.constData())[cTileHeaderBytes]);
+
     for (int i = 0; i < _tileInfo.gridSizeLat; i++) {
         for (int j = 0; j < _tileInfo.gridSizeLon; j++) {
             _elevationData[i][j] = pTileData[valueIndex++];
@@ -67,7 +70,7 @@ TerrainTile::TerrainTile(const QByteArray &byteArray)
 
 TerrainTile::~TerrainTile()
 {
-    // qCDebug(TerrainTileLog) << Q_FUNC_INFO << this;
+   // qCDebug(TerrainTileLog) << Q_FUNC_INFO << this;
 }
 
 double TerrainTile::elevation(const QGeoCoordinate &coordinate) const
@@ -77,11 +80,30 @@ double TerrainTile::elevation(const QGeoCoordinate &coordinate) const
         return qQNaN();
     }
 
-    const double latDeltaSw = coordinate.latitude() - _tileInfo.swLat;
-    const double lonDeltaSw = coordinate.longitude() - _tileInfo.swLon;
+    const double lat = coordinate.latitude();
+    const double lon = coordinate.longitude();
 
-    const int16_t latIndex = qFloor(latDeltaSw / _cellSizeLat);
-    const int16_t lonIndex = qFloor(lonDeltaSw / _cellSizeLon);
+            // Guard against NaN/Inf coordinates
+    if (!std::isfinite(lat) || !std::isfinite(lon)) {
+        qCWarning(TerrainTileLog) << this << "Internal error: non-finite coordinate" << coordinate;
+        return qQNaN();
+    }
+
+    const double latDeltaSw = lat - _tileInfo.swLat;
+    const double lonDeltaSw = lon - _tileInfo.swLon;
+
+            // Compute raw indices
+    int latIndex = qFloor(latDeltaSw / _cellSizeLat);
+    int lonIndex = qFloor(lonDeltaSw / _cellSizeLon);
+
+            // If coordinate lands exactly on the NE edge, floor() can produce gridSize,
+            // which is out-of-range. Clamp that specific case to last valid cell.
+    if (latIndex == _tileInfo.gridSizeLat) {
+        latIndex = _tileInfo.gridSizeLat - 1;
+    }
+    if (lonIndex == _tileInfo.gridSizeLon) {
+        lonIndex = _tileInfo.gridSizeLon - 1;
+    }
 
     const bool latIndexInvalid = (latIndex < 0) || (latIndex > (_tileInfo.gridSizeLat - 1));
     const bool lonIndexInvalid = (lonIndex < 0) || (lonIndex > (_tileInfo.gridSizeLon - 1));
@@ -92,9 +114,10 @@ double TerrainTile::elevation(const QGeoCoordinate &coordinate) const
     }
 
     if ((latIndex >= _elevationData.size()) || (lonIndex >= _elevationData[latIndex].size())) {
-        qCWarning(TerrainTileLog).noquote() << this << "Internal error: _elevationData size inconsistent _tileInfo << coordinate" << coordinate
-            << "\n\t_tillIndo.gridSizeLat:" << _tileInfo.gridSizeLat << "_tileInfo.gridSizeLon:" << _tileInfo.gridSizeLon
-            << "\n\t_data.size():" << _elevationData.size() << "_elevationData[latIndex].size():" << _elevationData[latIndex].size();
+        qCWarning(TerrainTileLog).noquote()
+        << this << "Internal error: _elevationData size inconsistent _tileInfo << coordinate" << coordinate
+        << "\n\t_tileInfo.gridSizeLat:" << _tileInfo.gridSizeLat << "_tileInfo.gridSizeLon:" << _tileInfo.gridSizeLon
+        << "\n\t_data.size():" << _elevationData.size() << "_elevationData[latIndex].size():" << _elevationData[latIndex].size();
         return qQNaN();
     }
 
