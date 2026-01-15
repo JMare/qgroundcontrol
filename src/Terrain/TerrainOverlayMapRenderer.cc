@@ -1,4 +1,3 @@
-// TerrainOverlayMapRenderer.cc
 /****************************************************************************
  *
  * (c) 2024 QGroundControl
@@ -11,12 +10,16 @@
 
 #include "HeatmapImageProvider.h"
 #include "TerrainTileManager.h"
-#include "TerrainQueryInterface.h"
+#include "TerrainTile.h"
 #include "QGCLoggingCategory.h"
+
 #include "SettingsManager.h"
 #include "FlightMapSettings.h"
 #include "ElevationMapProvider.h"
 #include "QGCMapUrlEngine.h"
+
+#include "MultiVehicleManager.h"
+#include "Vehicle.h"
 
 #include <QtCore/qapplicationstatic.h>
 #include <QTimer>
@@ -46,15 +49,21 @@ void TerrainOverlayMapRenderer::registerQmlTypes()
 TerrainOverlayMapRenderer::TerrainOverlayMapRenderer(QObject* parent)
     : QObject(parent)
 {
-    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Initializing singleton (QGC terrain mode).";
+    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Initializing singleton (terrain overlay).";
     setImageProvider(HeatmapImageProvider::instance());
 
-            // Drive retries/prefetch off actual tile arrivals (NO recursive requestCarpet loops).
+            // Tile arrivals drive retries/prefetch completion (no recursive requestCarpet loops)
     connect(TerrainTileManager::instance(), &TerrainTileManager::tileCached,
             this, &TerrainOverlayMapRenderer::_onTileCached);
 
-            // Don’t do work inline during UI construction.
-    _requestStartupCarpet();
+            // Active vehicle -> watch home position
+    connect(MultiVehicleManager::instance(), &MultiVehicleManager::activeVehicleChanged,
+            this, &TerrainOverlayMapRenderer::_activeVehicleChanged);
+
+            // If there is already an active vehicle at startup, handle it (next tick)
+    QTimer::singleShot(0, this, [this]() {
+        _activeVehicleChanged(MultiVehicleManager::instance()->activeVehicle());
+    });
 }
 
 void TerrainOverlayMapRenderer::setImageProvider(HeatmapImageProvider* provider)
@@ -95,7 +104,116 @@ void TerrainOverlayMapRenderer::clear()
     _prefetchActive = false;
     _prefetchProbeQueue.clear();
 
+            // Home load state
+    _homeRequestQueued = false;
+    _homeRequestCompleted = false;
+    _lastHomeUsed = QGeoCoordinate();
+
     qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Cleared overlay.";
+}
+
+void TerrainOverlayMapRenderer::_activeVehicleChanged(Vehicle* vehicle)
+{
+    if (_homeConn) {
+        disconnect(_homeConn);
+        _homeConn = QMetaObject::Connection();
+    }
+
+    _activeVehicle = vehicle;
+
+            // Reset home request state when switching vehicles
+    _homeRequestQueued = false;
+    _homeRequestCompleted = false;
+    _lastHomeUsed = QGeoCoordinate();
+
+    if (!vehicle) {
+        qCInfo(TerrainOverlayMapLog) << "[MapRenderer] activeVehicleChanged -> null";
+        return;
+    }
+
+    qCInfo(TerrainOverlayMapLog) << "[MapRenderer] activeVehicleChanged ->" << vehicle;
+
+            // If home is already valid, request immediately (debounced)
+    if (vehicle->homePosition().isValid()) {
+        _queueHomeCenteredRequest(vehicle->homePosition());
+        return;
+    }
+
+            // Otherwise, wait for homePositionChanged
+    _homeConn = connect(vehicle, &Vehicle::homePositionChanged,
+                        this, &TerrainOverlayMapRenderer::_vehicleHomePositionChanged);
+}
+
+void TerrainOverlayMapRenderer::_vehicleHomePositionChanged(const QGeoCoordinate& home)
+{
+    if (!home.isValid()) {
+        return;
+    }
+
+            // If we got home once, we can stop listening (home typically stabilizes after first valid)
+    if (_homeConn) {
+        disconnect(_homeConn);
+        _homeConn = QMetaObject::Connection();
+    }
+
+    _queueHomeCenteredRequest(home);
+}
+
+void TerrainOverlayMapRenderer::_queueHomeCenteredRequest(const QGeoCoordinate& home)
+{
+    if (!home.isValid()) return;
+
+            // Avoid repeated triggers if home bounces
+    if (_homeRequestCompleted) {
+        // If home moved a lot, allow re-request (optional)
+        const double movedM = _lastHomeUsed.isValid() ? _lastHomeUsed.distanceTo(home) : 1e9;
+        if (movedM < 25.0) { // tiny jitter
+            return;
+        }
+        // If it moved meaningfully, allow a fresh request
+        _homeRequestCompleted = false;
+    }
+
+    if (_homeRequestQueued) {
+        return;
+    }
+
+    _homeRequestQueued = true;
+
+            // Debounce into the event loop (and avoid doing work inline during vehicle signal)
+    QTimer::singleShot(0, this, [this, home]() {
+        _homeRequestQueued = false;
+        _lastHomeUsed = home;
+
+                // Pick a default radius. Tune as you like.
+        constexpr double kRadiusMeters = 4000.0; // ~4 km box around home
+        qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Home set -> requesting terrain around home:"
+                                     << home << "radius(m)=" << kRadiusMeters;
+
+        _requestAroundCoordinateMeters(home, kRadiusMeters);
+
+        _homeRequestCompleted = true;
+    });
+}
+
+void TerrainOverlayMapRenderer::_requestAroundCoordinateMeters(const QGeoCoordinate& center, double radiusMeters)
+{
+    if (!center.isValid() || radiusMeters <= 0.0) return;
+
+            // Convert meters to degrees (approx)
+    const double latRad = qDegreesToRadians(center.latitude());
+    const double metersPerDegLat = 111320.0;
+    const double metersPerDegLon = std::max(1.0, 111320.0 * std::cos(latRad));
+
+    const double dLat = radiusMeters / metersPerDegLat;
+    const double dLon = radiusMeters / metersPerDegLon;
+
+    const double minLat = center.latitude()  - dLat;
+    const double maxLat = center.latitude()  + dLat;
+    const double minLon = center.longitude() - dLon;
+    const double maxLon = center.longitude() + dLon;
+
+    requestCarpet(minLat, maxLat, minLon, maxLon, false);
 }
 
 void TerrainOverlayMapRenderer::_setBounds(double minLat, double maxLat, double minLon, double maxLon)
@@ -158,11 +276,11 @@ void TerrainOverlayMapRenderer::requestCarpet(double minLat, double maxLat, doub
                                  << "Lat[" << _minLat << "," << _maxLat << "]"
                                  << "Lon[" << _minLon << "," << _maxLon << "]";
 
-            // Cache-first pipeline (no recursion, no “prefetch complete” loops)
+            // Cache-first pipeline
     _tryBuildFromCacheOrPrefetch(statsOnly);
 
-            // Mark as not “in-flight” from UI standpoint after we attempted cache-first.
-            // Future updates are tile-driven.
+            // Mark not “in-flight” from UI standpoint after cache-first attempt.
+            // Future updates are tile-driven via tileCached.
     _carpetRequestInFlight = false;
 }
 
@@ -191,7 +309,6 @@ void TerrainOverlayMapRenderer::_tryBuildFromCacheOrPrefetch(bool statsOnly)
         return;
     }
 
-            // Convert to QVariantList grid (row-major already)
     _gridRows = rows;
     _gridCols = cols;
 
@@ -204,7 +321,6 @@ void TerrainOverlayMapRenderer::_tryBuildFromCacheOrPrefetch(bool statsOnly)
         _altitudeGrid.append(static_cast<double>(v));
     }
 
-            // Range props (tile stitch stats)
     const bool rangeChanged =
         !qFuzzyCompare(_terrainMinMeters + 1.0, minH + 1.0) ||
         !qFuzzyCompare(_terrainMaxMeters + 1.0, maxH + 1.0);
@@ -233,7 +349,6 @@ void TerrainOverlayMapRenderer::_tryBuildFromCacheOrPrefetch(bool statsOnly)
     _generateHeatmapImage();
     _debugCarpetSummary_5pt();
 
-            // If partial, prefetch more — but DO NOT re-request immediately.
     if (needsDownload) {
         if (_stableNanCountHits >= 3) {
             qCInfo(TerrainOverlayMapLog) << "[MapRenderer] NaNs not improving; stopping retries."
@@ -274,7 +389,6 @@ void TerrainOverlayMapRenderer::_scheduleRetryDebounced()
     QTimer::singleShot(60, this, [this]() {
         _retryScheduled = false;
 
-                // If no bounds set, ignore
         if (_maxLat == _minLat || _maxLon == _minLon) return;
 
         qCDebug(TerrainOverlayMapLog) << "[MapRenderer] tileCached -> retry cache-first build: key=" << _lastCarpetKey;
@@ -284,8 +398,6 @@ void TerrainOverlayMapRenderer::_scheduleRetryDebounced()
 
 void TerrainOverlayMapRenderer::_startPrefetchForCurrentBounds()
 {
-    // Build probe queue for all tiles in AOI.
-    // We’ll probe one coordinate per tile (tile center). TerrainTileManager downloads one tile at a time.
     const QString elevationProviderName =
         SettingsManager::instance()->flightMapSettings()->elevationMapProvider()->rawValue().toString();
     const SharedMapProvider provider = UrlFactory::getMapProviderFromProviderType(elevationProviderName);
@@ -295,7 +407,6 @@ void TerrainOverlayMapRenderer::_startPrefetchForCurrentBounds()
         return;
     }
 
-            // Compute tile ranges at “zoom 1” (provider ignores z for Copernicus anyway)
     const int z = 1;
     const int x0 = provider->long2tileX(_minLon, z);
     const int x1 = provider->long2tileX(_maxLon, z);
@@ -307,19 +418,16 @@ void TerrainOverlayMapRenderer::_startPrefetchForCurrentBounds()
     const int yMin = std::min(y0, y1);
     const int yMax = std::max(y0, y1);
 
-            // If already prefetching, don’t rebuild the queue endlessly.
+            // If already prefetching with a non-empty queue, don’t rebuild endlessly.
     if (_prefetchActive && !_prefetchProbeQueue.isEmpty()) {
         return;
     }
 
     _prefetchProbeQueue.clear();
 
-            // Probe tile centers in a stable order (row-major)
+            // Probe tile centers in stable order (row-major)
     for (int y = yMin; y <= yMax; ++y) {
         for (int x = xMin; x <= xMax; ++x) {
-            // Reconstruct approximate tile bounds from x/y using Copernicus constants:
-            // Tile size degrees is 0.01; long2tileX/lat2tileY defined as floor((lon+180)/tileSize), floor((lat+90)/tileSize)
-            // So tile SW = (y*tileSize - 90, x*tileSize - 180), NE = ((y+1)*tileSize - 90, (x+1)*tileSize - 180)
             constexpr double tileSize = 0.01;
             const double swLat = (static_cast<double>(y) * tileSize) - 90.0;
             const double swLon = (static_cast<double>(x) * tileSize) - 180.0;
@@ -362,14 +470,12 @@ void TerrainOverlayMapRenderer::_kickPrefetch()
         }
 
         if (!gotNow) {
-            // Download was queued; we will continue when tileCached fires.
+            // Download was queued; continue when tileCached fires.
             return;
         }
-
-                // gotNow==true means tile was already cached (or just became available), keep draining.
+        // gotNow==true => already cached, keep draining
     }
 
-            // Queue drained
     _prefetchActive = false;
     qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Prefetch queue drained.";
 }
@@ -491,24 +597,6 @@ void TerrainOverlayMapRenderer::_computeOverlayNativeZoomLevel(int imageWidth, i
                                  << "centerLat=" << _centerLat;
 
     emit boundsChanged();
-}
-
-void TerrainOverlayMapRenderer::_requestStartupCarpet()
-{
-    if (_startupCarpetRequested) return;
-    _startupCarpetRequested = true;
-
-            // Your test bounds
-    const double minLat = -28.83-0.05;
-    const double maxLat = -28.78-0.05;
-    const double minLon = 153.24-0.05;
-    const double maxLon = 153.30-0.05;
-
-    QTimer::singleShot(0, this, [this, minLat, maxLat, minLon, maxLon]() {
-        qCInfo(TerrainOverlayMapLog) << "[MapRenderer] Startup carpet request (C++ queued):"
-                                     << _makeBoundsKey(minLat, maxLat, minLon, maxLon);
-        requestCarpet(minLat, maxLat, minLon, maxLon, false);
-    });
 }
 
 int TerrainOverlayMapRenderer::_clampInt(int v, int lo, int hi)

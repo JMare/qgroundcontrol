@@ -1,4 +1,3 @@
-// TerrainOverlayMapRenderer.h
 /****************************************************************************
  *
  * (c) 2024 QGroundControl
@@ -14,12 +13,15 @@
 #include <QLoggingCategory>
 #include <QVariantList>
 #include <QQueue>
+#include <QPointer>
+#include <QMetaObject>
 
 #include "HeatmapImageProvider.h"
 
 Q_DECLARE_LOGGING_CATEGORY(TerrainOverlayMapLog)
 
 class TerrainOfflineQuery;
+class Vehicle;
 
 class TerrainOverlayMapRenderer : public QObject
 {
@@ -74,6 +76,10 @@ class TerrainOverlayMapRenderer : public QObject
    private slots:
     void _onTileCached(const QString& hash);
 
+            // Auto-load around home point for active vehicle
+    void _activeVehicleChanged(Vehicle* vehicle);
+    void _vehicleHomePositionChanged(const QGeoCoordinate& home);
+
    private:
     // UI / output
     void _setBounds(double minLat, double maxLat, double minLon, double maxLon);
@@ -81,12 +87,15 @@ class TerrainOverlayMapRenderer : public QObject
     void _computeOverlayNativeZoomLevel(int imageWidth, int imageHeight);
 
             // Carpet pipeline (cache-first + prefetch)
-    void _requestStartupCarpet();
     void _tryBuildFromCacheOrPrefetch(bool statsOnly);
     void _scheduleRetryDebounced();
     void _startPrefetchForCurrentBounds();
     void _kickPrefetch();
     void _debugCarpetSummary_5pt() const;
+
+            // Auto home helpers
+    void _queueHomeCenteredRequest(const QGeoCoordinate& home);
+    void _requestAroundCoordinateMeters(const QGeoCoordinate& center, double radiusMeters);
 
             // Helpers
     static QString _makeBoundsKey(double minLat, double maxLat, double minLon, double maxLon);
@@ -118,8 +127,7 @@ class TerrainOverlayMapRenderer : public QObject
     int _updateCounter = 0;
 
             // Request state
-    bool   _startupCarpetRequested = false;
-    bool   _carpetRequestInFlight  = false;
+    bool    _carpetRequestInFlight = false;
     QString _lastCarpetKey;
 
             // Retry control (prevents spam loops)
@@ -132,4 +140,12 @@ class TerrainOverlayMapRenderer : public QObject
             // Prefetch queue (drives downloads one-tile-at-a-time)
     bool _prefetchActive = false;
     QQueue<QGeoCoordinate> _prefetchProbeQueue;
+
+            // Active vehicle + home tracking
+    QPointer<Vehicle> _activeVehicle;
+    QMetaObject::Connection _homeConn;
+
+    bool _homeRequestQueued = false;
+    bool _homeRequestCompleted = false;
+    QGeoCoordinate _lastHomeUsed;
 };
