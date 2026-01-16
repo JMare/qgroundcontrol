@@ -27,7 +27,6 @@ class TerrainOverlayMapRenderer : public QObject
 {
     Q_OBJECT
 
-            // NEW: state machine for QML
    public:
     enum class State : int {
         Idle = 0,
@@ -61,10 +60,15 @@ class TerrainOverlayMapRenderer : public QObject
     Q_PROPERTY(int gridRows READ gridRows NOTIFY gridDataChanged)
     Q_PROPERTY(int gridCols READ gridCols NOTIFY gridDataChanged)
 
-            // Still useful for HUD/debug (but you can drive UI off state only)
     Q_PROPERTY(int nanCount READ nanCount NOTIFY progressChanged)
     Q_PROPERTY(double nanRatio READ nanRatio NOTIFY progressChanged)
-    Q_PROPERTY(double progress READ progress NOTIFY progressChanged)          // 0..1 (fill ratio)
+    Q_PROPERTY(double progress READ progress NOTIFY progressChanged)
+
+            // --------------------------------------------------------------------
+            // STEP 1: Preview altitude (for Guided slider / Takeoff slider)
+            // --------------------------------------------------------------------
+    Q_PROPERTY(bool previewAltitudeEnabled READ previewAltitudeEnabled WRITE setPreviewAltitudeEnabled NOTIFY previewChanged)
+    Q_PROPERTY(double previewAltitudeMeters READ previewAltitudeMeters WRITE setPreviewAltitudeMeters NOTIFY previewChanged)
 
    public:
     static TerrainOverlayMapRenderer* instance();
@@ -100,6 +104,13 @@ class TerrainOverlayMapRenderer : public QObject
     double nanRatio() const { return _nanRatio; }
     double progress() const { return _progress; }
 
+            // Preview altitude API
+    bool previewAltitudeEnabled() const { return _previewAltitudeEnabled; }
+    double previewAltitudeMeters() const { return _previewAltitudeMeters; }
+
+    void setPreviewAltitudeEnabled(bool enabled);
+    void setPreviewAltitudeMeters(double meters);
+
     void setImageProvider(HeatmapImageProvider* provider);
 
    signals:
@@ -108,9 +119,11 @@ class TerrainOverlayMapRenderer : public QObject
     void gridDataChanged();
     void terrainRangeChanged();
 
-            // NEW
     void stateChanged();
     void progressChanged();
+
+            // STEP 1 signal
+    void previewChanged();
 
    private slots:
     void _onTileCached(const QString& hash);
@@ -191,9 +204,15 @@ class TerrainOverlayMapRenderer : public QObject
     bool _homeRequestCompleted = false;
     QGeoCoordinate _lastHomeUsed;
 
-            // NEW: exposed state/progress
+            // Exposed state/progress
     State _state = State::Idle;
     int _nanCount = 0;
     double _nanRatio = 1.0;
     double _progress = 0.0;
+
+            // --------------------------------------------------------------------
+            // STEP 1 storage
+            // --------------------------------------------------------------------
+    bool   _previewAltitudeEnabled = false;
+    double _previewAltitudeMeters  = qQNaN();
 };

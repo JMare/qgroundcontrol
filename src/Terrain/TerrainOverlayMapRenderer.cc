@@ -25,6 +25,7 @@
 #include <QTimer>
 #include <QImage>
 #include <QtMath>
+#include <QtCore/QtNumeric>
 
 #include <algorithm>
 #include <limits>
@@ -42,8 +43,7 @@ void TerrainOverlayMapRenderer::registerQmlTypes()
     qmlRegisterUncreatableType<TerrainOverlayMapRenderer>(
         "QGroundControl.TerrainOverlayMapRenderer", 1, 0,
         "TerrainOverlayMapRenderer",
-        "Reference only"
-        );
+        "Reference only");
 }
 
 QString TerrainOverlayMapRenderer::stateName() const
@@ -77,6 +77,32 @@ TerrainOverlayMapRenderer::TerrainOverlayMapRenderer(QObject* parent)
     });
 
     _setState(State::Idle);
+}
+
+// --------------------------------------------------------------------
+// STEP 1: preview altitude setters
+// --------------------------------------------------------------------
+void TerrainOverlayMapRenderer::setPreviewAltitudeEnabled(bool enabled)
+{
+    if (_previewAltitudeEnabled == enabled) {
+        return;
+    }
+    _previewAltitudeEnabled = enabled;
+    emit previewChanged();
+}
+
+void TerrainOverlayMapRenderer::setPreviewAltitudeMeters(double meters)
+{
+    // We allow NaN (means "unset") so QML can clear it cleanly.
+    if (qIsNaN(_previewAltitudeMeters) && qIsNaN(meters)) {
+        return;
+    }
+    if (!qIsNaN(_previewAltitudeMeters) && !qIsNaN(meters) && qFuzzyCompare(_previewAltitudeMeters + 1.0, meters + 1.0)) {
+        return;
+    }
+
+    _previewAltitudeMeters = meters;
+    emit previewChanged();
 }
 
 void TerrainOverlayMapRenderer::setImageProvider(HeatmapImageProvider* provider)
@@ -131,6 +157,11 @@ void TerrainOverlayMapRenderer::clear()
     _nanRatio = 1.0;
     _progress = 0.0;
     emit progressChanged();
+
+            // STEP 1 reset
+    _previewAltitudeEnabled = false;
+    _previewAltitudeMeters  = qQNaN();
+    emit previewChanged();
 
     _setState(State::Idle);
 
@@ -195,7 +226,7 @@ void TerrainOverlayMapRenderer::_queueHomeCenteredRequest(const QGeoCoordinate& 
         _homeRequestQueued = false;
         _lastHomeUsed = home;
 
-        constexpr double kRadiusMeters = 2500.0; // tune
+        constexpr double kRadiusMeters = 2500.0;
         _requestAroundCoordinateMeters(home, kRadiusMeters);
 
         _homeRequestCompleted = true;
@@ -306,7 +337,6 @@ void TerrainOverlayMapRenderer::_evaluateCompletionHeuristics(bool needsDownload
         return;
     }
 
-            // still needs tiles
     if (_stableNanCountHits >= 3) {
         _setState(State::StabilizedPartial);
         return;
@@ -335,8 +365,7 @@ void TerrainOverlayMapRenderer::_tryBuildFromCacheOrPrefetch(bool statsOnly)
         cellLat, cellLon,
         minH, maxH,
         grid,
-        needsDownload
-        );
+        needsDownload);
 
     if (!ok) {
         _setState(State::Prefetching);

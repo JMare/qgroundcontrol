@@ -150,7 +150,13 @@ Item {
 
         property real droneLat: vehicle1 ? vehicle1.coordinate.latitude : NaN
         property real droneLon: vehicle1 ? vehicle1.coordinate.longitude : NaN
-        property real droneAlt: vehicle1 ? vehicle1.altitudeAMSL.value : 250.0
+        // ✅ UPDATED: use renderer preview override when enabled
+        property real droneAlt: {
+            if (terrainOverlayRenderer && terrainOverlayRenderer.previewAltitudeEnabled) {
+                return terrainOverlayRenderer.previewAltitudeMeters
+            }
+            return vehicle1 ? vehicle1.altitudeAMSL.value : 250.0
+        }
 
         // --- Terrain bounds ---
         property real minLat: terrainOverlayRenderer ? terrainOverlayRenderer.minLat : 0.0
