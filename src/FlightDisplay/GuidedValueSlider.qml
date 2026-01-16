@@ -29,6 +29,9 @@ Item {
         Speed
     }
 
+    signal liveValueChanged(real value)
+    signal liveEditingFinished(real value)
+
     property real   _sliderMaxVal:          0
     property real   _sliderMinVal:          0
     property int    _sliderType:            GuidedValueSlider.SliderType.Altitude
@@ -286,12 +289,14 @@ Item {
             onEditingFinished: {
                 visible = false
                 focus = false
-                setCurrentValue(parseFloat(_clampedSliderValueString(parseFloat(text))))
+                const v = parseFloat(_clampedSliderValueString(parseFloat(text)))
+                setCurrentValue(v)
+                control.liveEditingFinished(v)
             }
 
             Connections {
                 target: control
-                function on_SliderValueChanged() { sliderValueTextField.visible = false }
+                function on_SliderValueChanged() { sliderValueTextField.visible = false; liveValueChanged(getOutputValue()) }
             }
         }
     }

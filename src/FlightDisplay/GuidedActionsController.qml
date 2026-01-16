@@ -20,6 +20,7 @@ import QGroundControl.Controls
 import QGroundControl.Palette
 import QGroundControl.Vehicle
 import QGroundControl.FlightMap
+import QGroundControl.TerrainOverlayMapRenderer 1.0
 
 /// This provides the smarts behind the guided mode commands, minus the user interface. This way you can change UI
 /// without affecting the underlying functionality.
@@ -31,6 +32,7 @@ Item {
     property var guidedValueSlider
     property var fwdFlightGotoMapCircle
     property var orbitMapCircle
+    property var terrainOverlayRenderer: terrainOverlayMapRenderer
 
     readonly property string emergencyStopTitle:            qsTr("EMERGENCY STOP")
     readonly property string armTitle:                      qsTr("Arm")
@@ -205,6 +207,183 @@ Item {
     property bool __roiSupported:           _activeVehicle ? !_hideROI && _activeVehicle.roiModeSupported : false
     property bool __orbitSupported:         _activeVehicle ? !_hideOrbit && _activeVehicle.orbitModeSupported : false
     property bool __flightMode:             _flightMode
+
+
+    // --- Preview plumbing + debugging (DROP-IN REPLACEMENT) ---
+
+    function _dbgPrefix() { return "[GAC][Preview]" }
+
+    function _dbgState(tag, extra) {
+        // Keep this lightweight so it won't spam too hard
+        const hasR = !!terrainOverlayRenderer
+        const hasV = !!_activeVehicle
+        const vis  = guidedValueSlider ? guidedValueSlider.visible : false
+        const type = guidedValueSlider ? guidedValueSlider._sliderType : -1
+        const rel  = (hasV && _activeVehicle.altitudeRelative) ? _activeVehicle.altitudeRelative.value : NaN
+        const amsl = (hasV && _activeVehicle.altitudeAMSL) ? _activeVehicle.altitudeAMSL.value : NaN
+        const homeValid = (hasV && _activeVehicle.homePosition) ? _activeVehicle.homePosition.isValid : false
+        const homeAlt   = (hasV && _activeVehicle.homePosition) ? _activeVehicle.homePosition.altitude : NaN
+        const prevOn  = hasR ? terrainOverlayRenderer.previewAltitudeEnabled : undefined
+        const prevAlt = hasR ? terrainOverlayRenderer.previewAltitudeMeters  : undefined
+
+        console.log(_dbgPrefix(), tag,
+                    "renderer?", hasR,
+                    "vehicle?", hasV,
+                    "slider?", !!guidedValueSlider,
+                    "vis", vis,
+                    "type", type,
+                    "relNow", rel,
+                    "amslNow", amsl,
+                    "homeValid", homeValid,
+                    "homeAlt", homeAlt,
+                    "prevOn", prevOn,
+                    "prevAlt", prevAlt,
+                    extra ? extra : "")
+    }
+
+    function _previewSupportedForCurrentSlider() {
+        if (!guidedValueSlider) {
+            _dbgState("supported? no slider")
+            return false
+        }
+
+        const supported =
+            guidedValueSlider._sliderType === GuidedValueSlider.SliderType.Altitude ||
+            guidedValueSlider._sliderType === GuidedValueSlider.SliderType.Takeoff
+
+        _dbgState("supported? " + supported)
+        return supported
+    }
+
+    function _setPreviewEnabled(on) {
+        if (!terrainOverlayRenderer) {
+            console.warn(_dbgPrefix(), "no renderer instance (did you bind instance()?)")
+            return
+        }
+        terrainOverlayRenderer.previewAltitudeEnabled = on
+        _dbgState("setPreviewEnabled -> " + on)
+    }
+
+    function _sliderValueToPreviewAmslMeters(sliderValueAppUnits) {
+        if (!_activeVehicle) {
+            console.warn(_dbgPrefix(), "no active vehicle")
+            return NaN
+        }
+
+        // Slider value is in "app vertical distance units" (meters or feet). Convert to meters.
+        const valueMeters = _unitsConversion.appSettingsVerticalDistanceUnitsToMeters(sliderValueAppUnits)
+        if (!isFinite(valueMeters)) {
+            console.warn(_dbgPrefix(), "valueMeters not finite from slider", sliderValueAppUnits, "=>", valueMeters)
+            return NaN
+        }
+
+        // For Altitude/Takeoff sliders: slider is RELATIVE altitude. Convert to AMSL using home altitude if available.
+        const homeObj = _activeVehicle.homePosition
+        const homeValid = homeObj ? homeObj.isValid : false
+        const homeAlt = homeObj ? homeObj.altitude : NaN
+
+        if (homeValid && isFinite(homeAlt)) {
+            const amsl = homeAlt + valueMeters
+            _dbgState("rel->AMSL via HOME", "slider=" + sliderValueAppUnits + " app, " + valueMeters + " m => amsl=" + amsl)
+            return amsl
+        }
+
+        // fallback: approximate AMSL using current AMSL - current rel + desired rel
+        const amslNow = (_activeVehicle.altitudeAMSL && isFinite(_activeVehicle.altitudeAMSL.value)) ? _activeVehicle.altitudeAMSL.value : NaN
+        const relNow  = (_activeVehicle.altitudeRelative && isFinite(_activeVehicle.altitudeRelative.value)) ? _activeVehicle.altitudeRelative.value : NaN
+
+        if (isFinite(amslNow) && isFinite(relNow)) {
+            const amsl = amslNow - relNow + valueMeters
+            _dbgState("rel->AMSL via FALLBACK", "slider=" + sliderValueAppUnits + " app, " + valueMeters + " m => amsl=" + amsl)
+            return amsl
+        }
+
+        console.warn(_dbgPrefix(), "cannot compute AMSL: no valid homeAlt AND no valid (amslNow, relNow)")
+        _dbgState("rel->AMSL FAILED", "slider=" + sliderValueAppUnits + " app, " + valueMeters + " m")
+        return NaN
+    }
+
+    function _updatePreviewFromSlider(sliderValueAppUnits) {
+        if (!terrainOverlayRenderer) {
+            console.warn(_dbgPrefix(), "updatePreviewFromSlider: no renderer instance")
+            return
+        }
+        if (!_activeVehicle) {
+            console.warn(_dbgPrefix(), "updatePreviewFromSlider: no active vehicle")
+            return
+        }
+        if (!_previewSupportedForCurrentSlider()) {
+            _dbgState("updatePreviewFromSlider: unsupported slider type")
+            return
+        }
+
+        const amsl = _sliderValueToPreviewAmslMeters(sliderValueAppUnits)
+        if (!isFinite(amsl)) {
+            console.warn(_dbgPrefix(), "updatePreviewFromSlider: amsl not finite (slider:", sliderValueAppUnits, ")")
+            return
+        }
+
+        terrainOverlayRenderer.previewAltitudeEnabled = true
+        terrainOverlayRenderer.previewAltitudeMeters  = amsl
+
+        _dbgState("updatePreviewFromSlider: SET",
+                  "slider=" + sliderValueAppUnits + " app => amsl=" + amsl)
+    }
+
+    function _stopPreview() {
+        if (!terrainOverlayRenderer) return
+        terrainOverlayRenderer.previewAltitudeEnabled = false
+        _dbgState("stopPreview")
+    }
+
+    Connections {
+        target: guidedValueSlider
+
+        function onVisibleChanged() {
+            _dbgState("slider visibleChanged -> " + guidedValueSlider.visible)
+
+            if (!guidedValueSlider.visible) {
+                _stopPreview()
+                return
+            }
+
+            // Slider just became visible
+            if (_previewSupportedForCurrentSlider()) {
+                // Initialize once using current displayed value
+                const v = guidedValueSlider.getOutputValue()
+                console.log(_dbgPrefix(), "init from getOutputValue()", v)
+                _updatePreviewFromSlider(v)
+            } else {
+                _stopPreview()
+            }
+        }
+
+        // live updates while dragging/flicking (emitted by your slider modifications)
+        function onLiveValueChanged(value) {
+            // guard: only update while visible
+            if (guidedValueSlider.visible) {
+                console.log(_dbgPrefix(), "liveValueChanged", value)
+                _updatePreviewFromSlider(value)
+            }
+        }
+
+        // for the text-entry case (optional, only if you emit it)
+        function onLiveEditingFinished(value) {
+            if (guidedValueSlider.visible) {
+                console.log(_dbgPrefix(), "liveEditingFinished", value)
+                _updatePreviewFromSlider(value)
+            }
+        }
+    }
+
+    // Optional: also watch renderer changes so you can see if QML is hitting the real instance
+    Connections {
+        target: terrainOverlayRenderer
+        function onPreviewAltitudeEnabledChanged() { _dbgState("renderer previewAltitudeEnabledChanged") }
+        function onPreviewAltitudeMetersChanged()  { _dbgState("renderer previewAltitudeMetersChanged") }
+    }
+
+
 
     // Allow custom builds to add custom actions by overriding CustomGuidedActionsController.qml
     CustomGuidedActionsController {
@@ -402,6 +581,7 @@ Item {
     function closeAll() {
         confirmDialog.visible = false
         guidedValueSlider.visible = false
+        _stopPreview()
     }
 
     // Called when an action is about to be executed in order to confirm
